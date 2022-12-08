@@ -1,0 +1,25 @@
+Line# 1: TOKEN <LSQUARE> Lexeme <[> found
+Line# 2: TOKEN <IF> Lexeme <if> found
+Line# 2: TOKEN <LCURL> Lexeme <{> found
+Line# 3: TOKEN <CONST_INT> Lexeme <123> found
+Line# 3: TOKEN <ADDOP> Lexeme <+> found
+Line# 3: TOKEN <CONST_INT> Lexeme <30> found
+Line# 3: TOKEN <SEMICOLON> Lexeme <;> found
+Line# 4: TOKEN <BREAK> Lexeme <break> found
+Line# 4: TOKEN <SEMICOLON> Lexeme <;> found
+Line# 5: TOKEN <RCURL> Lexeme <}> found
+Line# 6: TOKEN <ELSE> Lexeme <else> found
+Line# 6: TOKEN <LCURL> Lexeme <{> found
+Error at line# <7>: <Too many decimal point>
+Line# 7: TOKEN <SEMICOLON> Lexeme <;> found
+Error at line# <8>: <Ill formed number>
+Line# 8: TOKEN <SEMICOLON> Lexeme <;> found
+Line# 9: TOKEN <CONST_FLOAT> Lexeme <0.31416> found
+Line# 9: TOKEN <INCOP> Lexeme <--> found
+Line# 9: TOKEN <SEMICOLON> Lexeme <;> found
+Line# 10: TOKEN <CONST_INT> Lexeme <100> found
+Line# 10: TOKEN <SEMICOLON> Lexeme <;> found
+Line# 11: TOKEN <CONTINUE> Lexeme <continue> found
+Line# 11: TOKEN <SEMICOLON> Lexeme <;> found
+Line# 11: TOKEN <RCURL> Lexeme <}> found
+Line# 12: TOKEN <RSQUARE> Lexeme <]> found
