@@ -73,6 +73,16 @@ void addToken_const_float() {
 	fprintf(logout, "Line# %d: TOKEN <%s> Lexeme <%s> found\n", line_count, token_name.data(), yytext);
 }
 
+void addToken_const_char() {
+	string token_name = "CONST_CHAR";
+	string char_literal = StringParser::parse(yytext);
+	StringUtils::replaceFirst(char_literal, "\'", "");
+	StringUtils::replaceLast(char_literal, "\'", "");
+
+	fprintf(tokenout, "<%s,%s>", token_name.data(), char_literal.data());
+	fprintf(logout, "Line# %d: TOKEN <%s> Lexeme <%s> found\n", line_count, token_name.data(), yytext);
+}
+
 void printError(string msg) {
 	fprintf(logout, "Error at line# <%d>: <%s>\n", line_count, msg.data());
 	err_count++;
@@ -104,18 +114,6 @@ void printError(string msg) {
 // 	line_count += StringUtils::occCount(yytext, '\n');
 
 // //	insertTosymTable(string_literal,token_name);
-// }
-
-// void addToken_const_char() {
-// 	string token_name = "CONST_CHAR";
-// 	string char_literal = StringParser::parse(yytext);
-// 	StringUtils::replaceFirst(char_literal, "\'", "");
-// 	StringUtils::replaceLast(char_literal, "\'", "");
-
-// 	fprintf(tokenout, TOKEN_PRINT_SYMBOL, token_name.data(), char_literal.data());
-// 	printLog(line_count, token_name, yytext);
-
-// 	insertTosymTable(yytext, token_name);
 // }
 
 // void comment() {

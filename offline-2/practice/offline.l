@@ -15,15 +15,28 @@ DECPOINT (\.)*
 FRACTION (\.{DIGITS})
 
 FLOAT ({DIGITS})?(\.?{DIGITS})(E[+-]?{DIGITS})?
-TOO_DECPOINT {DIGIT}*((\.)+{DIGITS})+(E{DECPOINT}[+-]?{DECPOINT}{DIGITS})?{DECPOINT}{DIGITS}*
+TOO_DECPOINT {DIGIT}*((\.)+{DIGITS})+(E{DECPOINT}[+-]?{DECPOINT}{DIGITS})?
 ILL_NUM ({DIGITS}|{FLOAT})[E]*{FLOAT}*
+
 
 %%
 {NEWLINE} {line_count++;}
 {WHITESPACE}+ {}
 
-{DIGITS}				{addToken_const_int();}
-{FLOAT}					{addToken_const_float();}
+{DIGITS}	{addToken_const_int();}
+{FLOAT}		{addToken_const_float();}
+(\'.\')		|
+(\'\\n\')	|
+(\'\\t\')	|
+(\'\\a\')	|	
+(\'\\b\')	|
+(\'\\r\')	|
+(\'\\f\')	|
+(\'\\v\')	|
+(\'\\\'\')	|
+(\'\\\"\')	|
+(\'\\\\')	|
+(\'\\0\')	{addToken_const_char();}
 
 {TOO_DECPOINT}			{printError("Too many decimal point");}
 {ILL_NUM}				{printError("Ill formed number");}

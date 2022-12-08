@@ -22,11 +22,18 @@ class StringParser {
 public:
 	static string parse(const string &str) {
 		string parsed = str;
-//		findAndReplaceAll(parsed, "\\n", "\n");
-		findAndReplaceAll(parsed, "\\n", "\n");
-		findAndReplaceAll(parsed, "\\t", "\t");
-		findAndReplaceAll(parsed, "\\\'", "\'");
-		findAndReplaceAll(parsed, "\\\"", "\"");
+		//replace each escape char with corresponding ascii code
+		findAndReplaceAll(parsed, "\\n", "10");
+		findAndReplaceAll(parsed, "\\t", "9");
+		findAndReplaceAll(parsed, "\\a", "7");
+		findAndReplaceAll(parsed, "\\b", "8");
+		findAndReplaceAll(parsed, "\\r", "13");
+		findAndReplaceAll(parsed, "\\f", "12");
+		findAndReplaceAll(parsed, "\\v", "11");
+		findAndReplaceAll(parsed, "\\\'", "39");
+		findAndReplaceAll(parsed, "\\\"", "34");
+		findAndReplaceAll(parsed, "\\\\", "92");
+		findAndReplaceAll(parsed, "\\0", "0");
 		return parsed;
 	}
 
