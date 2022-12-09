@@ -248,22 +248,23 @@ public:
 
 	int getLLPos(T& ob){return arr[hash(ob)].getPos(ob);} //position in the linked list of the bucket
 
-	// void printHashTable();
+	void printHashTable(FILE* fp);
 };
 
-// template<typename T>
-// void HashTable<T>::printHashTable() {    
-// 	for (int i = 0; i < size; ++i) {
-//         cout << "\t" << (i+1) << "--> ";
+template<typename T>
+void HashTable<T>::printHashTable(FILE* fp) {    
+	for (int i = 0; i < size; ++i) {
+        if(arr[i].length() > 0){
+            fprintf(fp, "\t%d--> ", (i+1));
 
-//         for (int j = 0; j < arr[i].length(); j++) {
-//             arr[i].moveToPos(j);
-//             cout << "<" << arr[i].getValue().getName() << "," << arr[i].getValue().getType() << "> ";
-//         }
-
-//         cout << endl;
-// 	}
-// }
+            for (int j = 0; j < arr[i].length(); j++) {
+                arr[i].moveToPos(j);
+                fprintf(fp, "<%s,%s> ", arr[i].getValue().getName().data(), arr[i].getValue().getType().data());
+            }
+            fprintf(fp, "\n");
+        }
+	}
+}
 //hashtable end
 
 
@@ -301,7 +302,7 @@ public:
 
 	bool _delete(  SymbolInfo&  sym){return remove(sym);}
 
-	// void print()    printHashTable();
+	void print(FILE* fp){printHashTable(fp);}
 };
 //ScopeTable End
 
@@ -384,18 +385,18 @@ public:
         return nullptr;
     }
 
-    // void __print(string printType){  //"A" or "C"
+    void __print(FILE* fp, string printType){  //"A" or "C"
 
-    //     if(printType == "C"){
-    //         curr_scope->print();
-    //     }
-    //     else if(printType == "A"){
-    //         for (ScopeTable *p = curr_scope; p; p = p->getParentScope()) {
-    //             p->print();
-    //         }
-    //     }
+        if(printType == "C"){
+            curr_scope->print(fp);
+        }
+        else if(printType == "A"){
+            for (ScopeTable *p = curr_scope; p; p = p->getParentScope()) {
+                p->print(fp);
+            }
+        }
 
-    // }
+    }
 
     void quit(){
         while (curr_scope) {

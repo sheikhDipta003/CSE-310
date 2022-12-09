@@ -4,39 +4,38 @@
 #include "lexBase.h"
 %}
 
-ANYTHING_EXCEPT_NEWLINE [^\n]
 
 WHITESPACE [ \t\f\r\v]+ 
 LETTER [a-zA-Z]
 DIGIT [0-9]
 DIGITS {DIGIT}+
-NEWLINE \n
-DECPOINT (\.)*
-FRACTION (\.{DIGITS})
 
+ID_START ({LETTER}|_)
+ID {ID_START}({LETTER}|{DIGIT}|_)*
+
+NEWLINE \n
+NOT_NEWLINE (^\n)
+CHAR (\'.\')
+ESC ((\'\\n\')|(\'\\t\')|(\'\\a\')|(\'\\b\')|(\'\\r\')|(\'\\f\')|(\'\\v\')|(\'\\\'\')|(\'\\\"\')|(\'\\\\')|(\'\\0\'))
+
+UNF_STR \"([^'"\\\n]|(\\)({NOT_NEWLINE}|{NEWLINE}))*
+STR {UNF_STR}\"
+
+DECPOINT (\.)*
 FLOAT ({DIGITS})?(\.?{DIGITS})(E[+-]?{DIGITS})?
 TOO_DECPOINT {DIGIT}*((\.)+{DIGITS})+(E{DECPOINT}[+-]?{DECPOINT}{DIGITS})?
 ILL_NUM ({DIGITS}|{FLOAT})[E]*{FLOAT}*
 
-
 %%
-{NEWLINE} {line_count++;}
+{NEWLINE}	{line_count++;}
 {WHITESPACE}+ {}
 
 {DIGITS}	{addToken_const_int();}
 {FLOAT}		{addToken_const_float();}
-(\'.\')		|
-(\'\\n\')	|
-(\'\\t\')	|
-(\'\\a\')	|	
-(\'\\b\')	|
-(\'\\r\')	|
-(\'\\f\')	|
-(\'\\v\')	|
-(\'\\\'\')	|
-(\'\\\"\')	|
-(\'\\\\')	|
-(\'\\0\')	{addToken_const_char();}
+
+({CHAR}|{ESC})			{addToken_const_char();}
+{STR}		{addToken_string();}
+
 
 {TOO_DECPOINT}			{printError("Too many decimal point");}
 {ILL_NUM}				{printError("Ill formed number");}
@@ -77,6 +76,8 @@ ILL_NUM ({DIGITS}|{FLOAT})[E]*{FLOAT}*
 "]"								{addToken_operator(_rsq_);}
 ","								{addToken_operator(_comma_);}
 ";"								{addToken_operator(_semicolon_);}
+
+{ID}	{addToken_identifier();}
 %%
 
 int main(int argc,char *argv[]){

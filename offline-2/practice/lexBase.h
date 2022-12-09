@@ -1,7 +1,7 @@
 #ifndef LEXICALANALYZER_LEXBASE_H
 #define LEXICALANALYZER_LEXBASE_H
 
-#define SYMBOL_TABLE_SIZE 73
+#define SYMBOL_TABLE_SIZE 10
 
 #define _addop_ "ADDOP"
 #define _mulop_ "MULOP"
@@ -31,16 +31,13 @@ int keyword_count = 0;
 int err_count = 0;
 
 
-#define REPLACE_NEWLINES(string_literal) StringUtils::replaceAll(string_literal, "\\\r\n", ""); // CRLF \
-StringUtils::replaceAll(string_literal, "\\\n", ""); // LF
 
 #define LOG_COMMENT_PRINT "\nLine no %d: TOKEN <COMMENT> Lexeme <%s> found\n"
 
-// void insertTosymTable(string token_symbol,string token_name) {
-// 	symTable.insert(token_symbol, token_name);
-// 	symTable.printAllScope(logout);
-
-// }
+void insertTosymTable(string token_symbol,string token_name) {
+	symTable.__insert(token_symbol, token_name);
+	symTable.__print(logout, "C");
+}
 
 
 // void addToken_keyword(string token_name) {
@@ -83,38 +80,30 @@ void addToken_const_char() {
 	fprintf(logout, "Line# %d: TOKEN <%s> Lexeme <%s> found\n", line_count, token_name.data(), yytext);
 }
 
+void addToken_string() {
+	string token_name = "STRING";
+
+	string string_literal = StringParser::parse(yytext);
+	StringUtils::replaceFirst(string_literal, "\"", "");
+	StringUtils::replaceLast(string_literal, "\"", "");
+	fprintf(tokenout,  "<%s,%s>", token_name.data(), string_literal.data());
+	fprintf(logout, "Line# %d: TOKEN <%s> Lexeme <%s> found\n", line_count, token_name.data(), yytext);
+
+	line_count += StringUtils::occCount(yytext, '\n');
+}
+
+void addToken_identifier() {
+	string token_name = "ID";
+	fprintf(tokenout, "<%s,%s>", token_name.data(), yytext);
+	fprintf(logout, "Line# %d: TOKEN <%s> Lexeme <%s> found\n", line_count, token_name.data(), yytext);
+	insertTosymTable(token_name, yytext);
+}
+
 void printError(string msg) {
 	fprintf(logout, "Error at line# <%d>: <%s>\n", line_count, msg.data());
 	err_count++;
 	line_count += StringUtils::occCount(yytext, '\n');
 }
-
-// void addToken_identifier() {
-// 	string token_name = "ID";
-// 	fprintf(tokenout, TOKEN_PRINT_SYMBOL, token_name.data(), yytext);
-// 	printLog(line_count, token_name, yytext);
-// 	insertTosymTable(yytext, token_name);
-// }
-
-// void addToken_string() {
-// 	string token_name = "STRING";
-
-// 	string string_literal = StringParser::parse(yytext);
-// 	StringUtils::replaceFirst(string_literal, "\"", "");
-// 	StringUtils::replaceLast(string_literal, "\"", "");
-// //	StringUtils::replaceAll(string_literal, "\\\r\n", ""); // CRLF
-// //	StringUtils::replaceAll(string_literal, "\\\n", ""); // LF
-// 	REPLACE_NEWLINES(string_literal);
-
-// 	//	string_literal=StringParser::parse(string_literal);
-// 	fprintf(tokenout, TOKEN_PRINT_SYMBOL, token_name.data(), string_literal.data());
-// 	printLog(line_count, token_name, yytext);
-// //	printLog(line_count, token_name, string_literal.data());
-
-// 	line_count += StringUtils::occCount(yytext, '\n');
-
-// //	insertTosymTable(string_literal,token_name);
-// }
 
 // void comment() {
 
