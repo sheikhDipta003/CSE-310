@@ -1,5 +1,7 @@
 %option noyywrap
 
+%x COMMENT_SL COMMENT_ML
+
 %{
 #include "lexBase.h"
 %}
@@ -14,7 +16,7 @@ ID_START ({LETTER}|_)
 ID {ID_START}({LETTER}|{DIGIT}|_)*
 
 NEWLINE \n
-NOT_NEWLINE (^\n)
+NOT_NEWLINE [^\n]
 CHAR (\'.\')
 ESC ((\'\\n\')|(\'\\t\')|(\'\\a\')|(\'\\b\')|(\'\\r\')|(\'\\f\')|(\'\\v\')|(\'\\\'\')|(\'\\\"\')|(\'\\\\')|(\'\\0\'))
 
@@ -27,18 +29,20 @@ TOO_DECPOINT {DIGIT}*((\.)+{DIGITS})+(E{DECPOINT}[+-]?{DECPOINT}{DIGITS})?
 ILL_NUM ({DIGITS}|{FLOAT})[E]*{FLOAT}*
 
 %%
-{NEWLINE}	{line_count++;}
-{WHITESPACE}+ {}
+{NEWLINE}		{line_count++;}
+{WHITESPACE}	{}
+<COMMENT_SL>{WHITESPACE} {}
+<COMMENT_ML>{WHITESPACE} {}
 
-{DIGITS}	{addToken_const_int();}
-{FLOAT}		{addToken_const_float();}
+{DIGITS}		{addToken_const_int();}
+{FLOAT}			{addToken_const_float();}
 
-({CHAR}|{ESC})			{addToken_const_char();}
-{STR}		{addToken_string();}
+({CHAR}|{ESC})	{addToken_const_char();}
+{STR}			{addToken_string();}
 
 
-{TOO_DECPOINT}			{printError("Too many decimal point");}
-{ILL_NUM}				{printError("Ill formed number");}
+{TOO_DECPOINT}	{printError("Too many decimal point");}
+{ILL_NUM}		{printError("Ill formed number");}
 
 
 "if" 		|
@@ -77,7 +81,12 @@ ILL_NUM ({DIGITS}|{FLOAT})[E]*{FLOAT}*
 ","								{addToken_operator(_comma_);}
 ";"								{addToken_operator(_semicolon_);}
 
-{ID}	{addToken_identifier();}
+{ID}							{addToken_identifier();}
+
+"//"							{BEGIN COMMENT_SL;}				
+<COMMENT_SL>({NOT_NEWLINE})*		{comment();}
+<COMMENT_SL>{NEWLINE}				{BEGIN INITIAL;}
+
 %%
 
 int main(int argc,char *argv[]){

@@ -1,6 +1,8 @@
 [
 if{
     x = 2;
+    /*this is a 
+    comment*/
 }
 else{}
 ]

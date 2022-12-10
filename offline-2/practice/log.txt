@@ -6,8 +6,9 @@ Line# 3: TOKEN <ID> Lexeme <x> found
 Line# 3: TOKEN <ASSIGNOP> Lexeme <=> found
 Line# 3: TOKEN <CONST_INT> Lexeme <2> found
 Line# 3: TOKEN <SEMICOLON> Lexeme <;> found
-Line# 4: TOKEN <RCURL> Lexeme <}> found
-Line# 5: TOKEN <ELSE> Lexeme <else> found
-Line# 5: TOKEN <LCURL> Lexeme <{> found
-Line# 5: TOKEN <RCURL> Lexeme <}> found
-Line# 6: TOKEN <RSQUARE> Lexeme <]> found
+
+Line# 4: TOKEN <COMMENT> Lexeme <this is a 
+    comment*/
+}
+else{}
+]> found

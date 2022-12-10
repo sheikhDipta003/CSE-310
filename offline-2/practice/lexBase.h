@@ -31,9 +31,6 @@ int keyword_count = 0;
 int err_count = 0;
 
 
-
-#define LOG_COMMENT_PRINT "\nLine no %d: TOKEN <COMMENT> Lexeme <%s> found\n"
-
 void insertTosymTable(string token_symbol,string token_name) {
 	symTable.__insert(token_symbol, token_name);
 	symTable.__print(logout, "C");
@@ -99,28 +96,28 @@ void addToken_identifier() {
 	insertTosymTable(token_name, yytext);
 }
 
+void comment() {
+
+	string cmnt = yytext;
+	cout << cmnt;
+
+	// if(cmnt[1]=='/'){
+	// 	StringUtils::replaceFirst(cmnt,"//","");
+	// 	 StringUtils::replaceAll(cmnt, "\\\n", "");
+	// } else{
+	// 	StringUtils::replaceFirst(cmnt,"/*","");
+	// 	StringUtils::replaceFirst(cmnt,"*/","");
+	// }
+
+	fprintf(logout, "\nLine# %d: TOKEN <COMMENT> Lexeme <%s> found\n", line_count, cmnt.data());
+
+	line_count += StringUtils::occCount(yytext, '\n');
+}
+
 void printError(string msg) {
 	fprintf(logout, "Error at line# <%d>: <%s>\n", line_count, msg.data());
 	err_count++;
 	line_count += StringUtils::occCount(yytext, '\n');
 }
-
-// void comment() {
-
-// 	string cmnt = string(yytext);
-
-// 	if(cmnt[1]=='/'){
-// 		StringUtils::replaceFirst(cmnt,"//","");
-// 		REPLACE_NEWLINES(cmnt);
-// 	} else{
-// 		StringUtils::replaceFirst(cmnt,"/*","");
-// 		StringUtils::replaceFirst(cmnt,"*/","");
-// 	}
-
-// 	fprintf(logout, LOG_COMMENT_PRINT, line_count, cmnt.data());
-
-// //	string s(yytext);
-// 	line_count += StringUtils::occCount(yytext, '\n');
-// }
 
 #endif //LEXICALANALYZER_LEXBASE_H
