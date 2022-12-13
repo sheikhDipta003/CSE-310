@@ -99,15 +99,15 @@ void addToken_identifier() {
 void comment() {
 
 	string cmnt = yytext;
-	cout << cmnt;
+	// cout << cmnt;
 
-	// if(cmnt[1]=='/'){
-	// 	StringUtils::replaceFirst(cmnt,"//","");
-	// 	 StringUtils::replaceAll(cmnt, "\\\n", "");
-	// } else{
-	// 	StringUtils::replaceFirst(cmnt,"/*","");
-	// 	StringUtils::replaceFirst(cmnt,"*/","");
-	// }
+	if(cmnt[1]=='/'){
+		StringUtils::replaceFirst(cmnt,"//","");
+		 StringUtils::replaceAll(cmnt, "\\\n", "");
+	} else{
+		StringUtils::replaceFirst(cmnt,"/*","");
+		StringUtils::replaceFirst(cmnt,"*/","");
+	}
 
 	fprintf(logout, "\nLine# %d: TOKEN <COMMENT> Lexeme <%s> found\n", line_count, cmnt.data());
 

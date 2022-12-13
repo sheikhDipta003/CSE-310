@@ -1,8 +1,4 @@
-[
-if{
-    x = 2;
-    /*this is a 
-    comment*/
-}
-else{}
-]
+/*this is 
+another comment*/
+
+//this is a comment

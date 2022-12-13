@@ -6,19 +6,23 @@
 #include "lexBase.h"
 %}
 
-
-WHITESPACE [ \t\f\r\v]+ 
+WHITESPACE [ \t\f\r\v]+
 LETTER [a-zA-Z]
 DIGIT [0-9]
 DIGITS {DIGIT}+
 
 ID_START ({LETTER}|_)
 ID {ID_START}({LETTER}|{DIGIT}|_)*
+INVALID_ID [^{LETTER}_][{LETTER}{DIGIT}_]+
 
 NEWLINE \n
 NOT_NEWLINE [^\n]
+
 CHAR (\'.\')
 ESC ((\'\\n\')|(\'\\t\')|(\'\\a\')|(\'\\b\')|(\'\\r\')|(\'\\f\')|(\'\\v\')|(\'\\\'\')|(\'\\\"\')|(\'\\\\')|(\'\\0\'))
+INVALID_CHAR (\'..+\')
+UNF_CHAR '({CHAR}|\\)*
+EMP_CHAR	('')
 
 UNF_STR \"([^'"\\\n]|(\\)({NOT_NEWLINE}|{NEWLINE}))*
 STR {UNF_STR}\"
@@ -38,7 +42,12 @@ ILL_NUM ({DIGITS}|{FLOAT})[E]*{FLOAT}*
 {FLOAT}			{addToken_const_float();}
 
 ({CHAR}|{ESC})	{addToken_const_char();}
+{INVALID_CHAR}  {printError("Invalid character");}
+{UNF_CHAR}		{printError("Unfinished character");}
+{EMP_CHAR}		{printError("Empty character");}
+
 {STR}			{addToken_string();}
+{UNF_STR}		{printError("Unfinished string");}
 
 
 {TOO_DECPOINT}	{printError("Too many decimal point");}
@@ -83,10 +92,15 @@ ILL_NUM ({DIGITS}|{FLOAT})[E]*{FLOAT}*
 
 {ID}							{addToken_identifier();}
 
-"//"							{BEGIN COMMENT_SL;}				
-<COMMENT_SL>({NOT_NEWLINE})*		{comment();}
-<COMMENT_SL>{NEWLINE}				{BEGIN INITIAL;}
+"/*" 									{BEGIN COMMENT_ML;}
+<COMMENT_ML>"*/" 						{BEGIN INITIAL;}
+<COMMENT_ML>({NOT_NEWLINE}|{NEWLINE})*	{comment();}
 
+"//"							{BEGIN COMMENT_SL;}
+<COMMENT_SL>{NEWLINE}			{BEGIN INITIAL;}
+<COMMENT_SL>({NOT_NEWLINE})*	{comment();}
+
+<<EOF>> {fprintf(logout,"\nTotal Line Number: %d\nTotal Errors: %d\n",line_count,err_count); return 0;}
 %%
 
 int main(int argc,char *argv[]){

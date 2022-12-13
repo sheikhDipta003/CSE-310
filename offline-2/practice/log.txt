@@ -1,14 +1,8 @@
-Line# 1: TOKEN <LSQUARE> Lexeme <[> found
-Line# 2: TOKEN <IF> Lexeme <if> found
-Line# 2: TOKEN <LCURL> Lexeme <{> found
-Line# 3: TOKEN <ID> Lexeme <x> found
-	6--> <ID,x> 
-Line# 3: TOKEN <ASSIGNOP> Lexeme <=> found
-Line# 3: TOKEN <CONST_INT> Lexeme <2> found
-Line# 3: TOKEN <SEMICOLON> Lexeme <;> found
 
-Line# 4: TOKEN <COMMENT> Lexeme <this is a 
-    comment*/
-}
-else{}
-]> found
+Line# 1: TOKEN <COMMENT> Lexeme <this is 
+another comment
+
+//this is a comment> found
+
+Total Line Number: 4
+Total Errors: 0
