@@ -138,15 +138,21 @@ void ignoreComment_SL(){
 }
 
 void showError(string msg) {
-	fprintf(logout, "Error at line# %d: %s %s\n", num_lines, msg.data(), yytext);
-	num_err++;
 	string string_literal = replace(yytext);
-	num_lines += std::count(string_literal.begin(), string_literal.end(), '\n');
+	int err_line_count = std::count(string_literal.begin(), string_literal.end(), '\n');
+
+	fprintf(logout, "Error at line# %d: %s %s\n", num_lines + err_line_count, msg.data(), yytext);
+
+	num_err++;
+	num_lines += err_line_count;
 }
 
 void showCmntError(string msg, string unf_cmnt){
-	fprintf(logout, "Error at line# %d: %s %s\n", num_lines, msg.data(), unf_cmnt.data());
-	num_err++;
 	string string_literal = replace(unf_cmnt.data());
-	num_lines += std::count(string_literal.begin(), string_literal.end(), '\n');
+	int err_line_count = std::count(string_literal.begin(), string_literal.end(), '\n');
+
+	fprintf(logout, "Error at line# %d: %s %s\n", num_lines + err_line_count, msg.data(), unf_cmnt.data());
+	
+	num_err++;
+	num_lines += err_line_count;
 }
