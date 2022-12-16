@@ -4,24 +4,25 @@
 
 %{
 #include "lexBase.h"
+char* p;
 %}
 
 WHITESPACE [ \t\f\r\v]+
 LETTER [a-zA-Z]
 DIGIT [0-9]
 DIGITS {DIGIT}+
+NEWLINE \n
+NOT_NEWLINE [^\n]
+SLASH [\\]
 
 ID_START ({LETTER}|_)
 ID {ID_START}({LETTER}|{DIGIT}|_)*
-INVALID_ID [^{LETTER}_][{LETTER}{DIGIT}_]+
+INVALID_ID {DIGIT}({LETTER}|{DIGIT})*
 
-NEWLINE \n
-NOT_NEWLINE [^\n]
-
-CHAR (\'.\')
+CHAR (\'[^\n]\')
 ESC ((\'\\n\')|(\'\\t\')|(\'\\a\')|(\'\\b\')|(\'\\r\')|(\'\\f\')|(\'\\v\')|(\'\\\'\')|(\'\\\"\')|(\'\\\\')|(\'\\0\'))
 INVALID_CHAR (\'..+\')
-UNF_CHAR '({CHAR}|\\)*
+UNF_CHAR ('{CHAR}*[^'\n]?)
 EMP_CHAR	('')
 
 UNF_STR \"([^'"\\\n]|(\\)({NOT_NEWLINE}|{NEWLINE}))*
@@ -33,7 +34,8 @@ TOO_DECPOINT {DIGIT}*((\.)+{DIGITS})+(E{DECPOINT}[+-]?{DECPOINT}{DIGITS})?
 ILL_NUM ({DIGITS}|{FLOAT})[E]*{FLOAT}*
 
 %%
-{NEWLINE}		{line_count++;}
+{NEWLINE}		{num_lines++;}
+
 {WHITESPACE}	{}
 <COMMENT_SL>{WHITESPACE} {}
 <COMMENT_ML>{WHITESPACE} {}
@@ -42,16 +44,16 @@ ILL_NUM ({DIGITS}|{FLOAT})[E]*{FLOAT}*
 {FLOAT}			{addToken_const_float();}
 
 ({CHAR}|{ESC})	{addToken_const_char();}
-{INVALID_CHAR}  {printError("Invalid character");}
-{UNF_CHAR}		{printError("Unfinished character");}
-{EMP_CHAR}		{printError("Empty character");}
+{INVALID_CHAR}  {printError("MULTICHAR_CONST_CHAR");}
+{UNF_CHAR}		{printError("UNFINISHED_CONST_CHAR");}
+{EMP_CHAR}		{printError("EMPTY_CONST_CHAR");}
 
 {STR}			{addToken_string();}
-{UNF_STR}		{printError("Unfinished string");}
+{UNF_STR}		{printError("UNFINISHED_STRING");}
 
 
-{TOO_DECPOINT}	{printError("Too many decimal point");}
-{ILL_NUM}		{printError("Ill formed number");}
+{TOO_DECPOINT}	{printError("TOO_MANY_DECIMAL_POINTS");}
+{ILL_NUM}		{printError("ILLFORMED_NUMBER");}
 
 
 "if" 		|
@@ -91,16 +93,37 @@ ILL_NUM ({DIGITS}|{FLOAT})[E]*{FLOAT}*
 ";"								{addToken_operator(_semicolon_);}
 
 {ID}							{addToken_identifier();}
+{INVALID_ID}					{printError("INVALID_ID_SUFFIX_NUM_PREFIX");}
 
-"/*" 									{BEGIN COMMENT_ML;}
-<COMMENT_ML>"*/" 						{BEGIN INITIAL;}
-<COMMENT_ML>({NOT_NEWLINE}|{NEWLINE})*	{comment();}
+<INITIAL>"/*" { 
+  p = yytext;
+  BEGIN(COMMENT_ML); 
+}
+<COMMENT_ML>"*/" { 
+  char* cmnt = strndup(p, yytext - p + 2);
+  fprintf(logout, "Line# %d: TOKEN <MULTI LINE COMMENT> Lexeme %s found\n", num_lines, cmnt);
+  free(cmnt); 
+  BEGIN(INITIAL); 
+}
+<COMMENT_ML>. {} 
+<COMMENT_ML>\n {num_lines++;} 
 
-"//"							{BEGIN COMMENT_SL;}
-<COMMENT_SL>{NEWLINE}			{BEGIN INITIAL;}
-<COMMENT_SL>({NOT_NEWLINE})*	{comment();}
+<INITIAL>"//" { 
+  p = yytext; 
+  BEGIN(COMMENT_SL); 
+}
+<COMMENT_SL>{NEWLINE} { 
+  char* cmnt = strndup(p, yytext - p + 2);
+  fprintf(logout, "Line# %d: TOKEN <SINGLE LINE COMMENT> Lexeme %s found\n", num_lines, cmnt);
+  free(cmnt); 
+  BEGIN(INITIAL); 
+}
+<COMMENT_SL>. {}
+<COMMENT_SL>({SLASH}{NEWLINE}) {num_lines++;}
 
-<<EOF>> {fprintf(logout,"\nTotal Line Number: %d\nTotal Errors: %d\n",line_count,err_count); return 0;}
+.								{printError("UNRECOGNIZED_CHAR");}
+
+<<EOF>> {fprintf(logout,"Total lines: %d\nTotal errors: %d\n",num_lines,num_err); return 0;}
 %%
 
 int main(int argc,char *argv[]){

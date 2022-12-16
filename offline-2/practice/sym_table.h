@@ -2,8 +2,12 @@
 #include <sstream>
 #include <fstream>
 #include <iostream>
-#include<bits/stdc++.h>
+#include <bits/stdc++.h>
+#include <algorithm>
+#include <regex>
 using namespace std;
+
+FILE *logout, *tokenout;
 
 //SymbolInfo start
 class SymbolInfo {
@@ -248,20 +252,20 @@ public:
 
 	int getLLPos(T& ob){return arr[hash(ob)].getPos(ob);} //position in the linked list of the bucket
 
-	void printHashTable(FILE* fp);
+	void printHashTable();
 };
 
 template<typename T>
-void HashTable<T>::printHashTable(FILE* fp) {    
+void HashTable<T>::printHashTable() {    
 	for (int i = 0; i < size; ++i) {
         if(arr[i].length() > 0){
-            fprintf(fp, "\t%d--> ", (i+1));
+            fprintf(logout, "\t%d--> ", (i+1));
 
             for (int j = 0; j < arr[i].length(); j++) {
                 arr[i].moveToPos(j);
-                fprintf(fp, "<%s,%s> ", arr[i].getValue().getName().data(), arr[i].getValue().getType().data());
+                fprintf(logout, "<%s,%s> ", arr[i].getValue().getName().data(), arr[i].getValue().getType().data());
             }
-            fprintf(fp, "\n");
+            fprintf(logout, "\n");
         }
 	}
 }
@@ -302,7 +306,10 @@ public:
 
 	bool _delete(  SymbolInfo&  sym){return remove(sym);}
 
-	void print(FILE* fp){printHashTable(fp);}
+	void print(){
+        fprintf(logout, "\tScopeTable# %d\n", this->count);
+        printHashTable();
+    }
 };
 //ScopeTable End
 
@@ -349,6 +356,8 @@ public:
 
         if (curr_scope->_insert(sym)) return true;
 
+        fprintf(logout, "\t%s already exists in current ScopeTable\n", sym.getName().data());
+
         return false;
     }
 
@@ -385,14 +394,14 @@ public:
         return nullptr;
     }
 
-    void __print(FILE* fp, string printType){  //"A" or "C"
+    void __print(string printType){  //"A" or "C"
 
         if(printType == "C"){
-            curr_scope->print(fp);
+            curr_scope->print();
         }
         else if(printType == "A"){
             for (ScopeTable *p = curr_scope; p; p = p->getParentScope()) {
-                p->print(fp);
+                p->print();
             }
         }
 
