@@ -1,2 +1,1 @@
-<CONST_CHAR,>
-<ID,ijk>
+<ID, ijk>

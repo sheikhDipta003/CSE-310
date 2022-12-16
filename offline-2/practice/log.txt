@@ -6,14 +6,18 @@ Error at line# 5: MULTICHAR_CONST_CHAR 'ab'
 Error at line# 6: UNFINISHED_CONST_CHAR 'a
 Error at line# 7: UNFINISHED_CONST_CHAR '
 Error at line# 8: MULTICHAR_CONST_CHAR 'ab cd'
-Line# 9: TOKEN <CONST_CHAR> Lexeme  found
+Error at line# 9: UNFINISHED_CONST_CHAR '\'
 Error at line# 10: EMPTY_CONST_CHAR ''
 Error at line# 11: UNFINISHED_STRING "abcd
 Error at line# 12: UNFINISHED_STRING "abcd\
 efgh
-Line# 14: TOKEN <ID> Lexeme ijk found
+Line# 14: Token <ID> Lexeme ijk found
 	ScopeTable# 1
 	7--> <ijk,ID> 
 Error at line# 14: UNFINISHED_STRING "
+Error at line# 15: UNFINISHED_COMMENT /**abc
+def
+	ScopeTable# 1
+	7--> <ijk,ID> 
 Total lines: 16
-Total errors: 12
+Total errors: 14

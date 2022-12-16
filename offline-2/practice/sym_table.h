@@ -257,7 +257,7 @@ public:
 
 template<typename T>
 void HashTable<T>::printHashTable() {    
-	for (int i = 0; i < size; ++i) {
+	for (int i = 0; i < size; i++) {
         if(arr[i].length() > 0){
             fprintf(logout, "\t%d--> ", (i+1));
 
@@ -356,7 +356,7 @@ public:
 
         if (curr_scope->_insert(sym)) return true;
 
-        fprintf(logout, "\t%s already exists in current ScopeTable\n", sym.getName().data());
+        fprintf(logout, "\t%s already exists in the current ScopeTable\n", sym.getName().data());
 
         return false;
     }
