@@ -49,7 +49,6 @@ string replace(const char* str) {
 	replace_help(replaced, "\\v", "\v");
 	replace_help(replaced, "\\\'", "\'");
 	replace_help(replaced, "\\\"", "\"");
-	replace_help(replaced, "\\\\", "\\\\");
 	replace_help(replaced, "\\0", "\0");
 
 	return replaced;
@@ -72,10 +71,7 @@ void add_punc_op(string token) {
 	fprintf(logout, "Line# %d: Token <%s> Lexeme %s found\n", num_lines, token.data(), yytext);
 
 	if(token == _lcurl_)	symTable.enterScope();
-	else if(token == _rcurl_){
-		symTable.exitScope();
-		symTable.__print("A");
-	}
+	else if(token == _rcurl_)	symTable.exitScope();
 }
 
 void addConstInt() {
@@ -94,31 +90,32 @@ void addConstChar() {
 	string token = "CONST_CHAR";
 
 	//replace with ascii representations
-	string char_literal = replace(yytext);
+	string const_char = replace(yytext);
 
 	//remove enclosing quotations
-	char_literal = "" + char_literal.substr(1);
-	char_literal = char_literal.substr(0, char_literal.size() - 1) + "";
+	const_char = "" + const_char.substr(1);
+	const_char = const_char.substr(0, const_char.size() - 1) + "";
 
-	fprintf(tokenout, "<%s, %s>\n", token.data(), char_literal.data());
-	fprintf(logout, "Line# %d: Token <%s> Lexeme %s found\n", num_lines, token.data(), char_literal.data());
+	fprintf(tokenout, "<%s, %s>\n", token.data(), const_char.data());
+	fprintf(logout, "Line# %d: Token <%s> Lexeme %s found\n", num_lines, token.data(), const_char.data());
 }
 
 void addString() {
-	string token;
-
-	string string_literal = replace(yytext);
+	//replace with ascii representations
+	string const_str = replace(yytext);
 
 	//remove enclosing quotations
-	string_literal = "" + string_literal.substr(1);
-	string_literal = string_literal.substr(0, string_literal.size() - 1) + "";
-	int num_newline_char = std::count(string_literal.begin(), string_literal.end(), '\n');
+	const_str = "" + const_str.substr(1);
+	const_str = const_str.substr(0, const_str.size() - 1) + "";
+	int num_newline_char = std::count(const_str.begin(), const_str.end(), '\n');
 
+	string token;
 	if(num_newline_char == 0)	token = "SINGLE LINE STRING";
 	else	token = "MULTI LINE STRING";
 
-	replace_help(string_literal, "\\\n\t", "\t");
-	fprintf(tokenout,  "<%s, %s>\n", token.data(), string_literal.data());
+	const_str.erase(std::remove(const_str.begin(), const_str.end(), '\\'), const_str.end()); 	//remove backslash
+	const_str.erase(std::remove(const_str.begin(), const_str.end(), '\n'), const_str.end()); 	//remove newline
+	fprintf(tokenout,  "<%s, %s>\n", token.data(), const_str.data());
 	fprintf(logout, "Line# %d: Token <%s> Lexeme %s found\n", num_lines, token.data(), yytext);
 
 	num_lines += num_newline_char;
@@ -131,7 +128,7 @@ void installID() {
 	insertIntoTable(token, yytext);
 }
 
-void ignoreComment_SL(){
+void ignoreComment(){
 	string string_literal = replace(yytext);
 	fprintf(logout, "Line# %d: Token <SINGLE LINE COMMENT> Lexeme %s found\n", num_lines, yytext);
 	num_lines += std::count(string_literal.begin(), string_literal.end(), '\n');

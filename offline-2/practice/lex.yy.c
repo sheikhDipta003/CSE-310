@@ -1102,7 +1102,7 @@ case 48:
 /* rule 48 can match eol */
 YY_RULE_SETUP
 #line 99 "offline.l"
-{ignoreComment_SL();}
+{ignoreComment();}
 	YY_BREAK
 case 49:
 YY_RULE_SETUP
@@ -1138,7 +1138,6 @@ case YY_STATE_EOF(COMMENT_ML):
 #line 114 "offline.l"
 {
 					showCmntError("UNFINISHED_COMMENT", cmntStart); 
-					symTable.exitScope();
 					symTable.__print("A");
 					fprintf(logout,"Total lines: %d\nTotal errors: %d\n",num_lines,num_err); 
 					return 0;
@@ -1146,19 +1145,23 @@ case YY_STATE_EOF(COMMENT_ML):
 	YY_BREAK
 case 53:
 YY_RULE_SETUP
-#line 122 "offline.l"
+#line 121 "offline.l"
 {showError("UNRECOGNIZED_CHAR");}
 	YY_BREAK
 case YY_STATE_EOF(INITIAL):
-#line 124 "offline.l"
-{fprintf(logout,"Total lines: %d\nTotal errors: %d\n",num_lines,num_err); return 0;}
+#line 123 "offline.l"
+{
+					symTable.__print("A");
+					fprintf(logout,"Total lines: %d\nTotal errors: %d\n",num_lines,num_err);
+					return 0;
+					}
 	YY_BREAK
 case 54:
 YY_RULE_SETUP
-#line 125 "offline.l"
+#line 128 "offline.l"
 ECHO;
 	YY_BREAK
-#line 1162 "lex.yy.c"
+#line 1165 "lex.yy.c"
 
 	case YY_END_OF_BUFFER:
 		{
@@ -2161,7 +2164,7 @@ void yyfree (void * ptr )
 
 #define YYTABLES_NAME "yytables"
 
-#line 125 "offline.l"
+#line 128 "offline.l"
 
 
 int main(int argc,char *argv[]){

@@ -96,7 +96,7 @@ CMNT_SL 		"//"({NOT_NEWLINE}*({SLASH}{NEWLINE}))*{NOT_NEWLINE}*
 {INVALID_ID}		{showError("INVALID_ID_SUFFIX_NUM_PREFIX");}
 
 
-{CMNT_SL}			{ignoreComment_SL();}
+{CMNT_SL}			{ignoreComment();}
 
 <INITIAL>"/*" 		{ 
 					cmntStart = yytext;
@@ -113,7 +113,6 @@ CMNT_SL 		"//"({NOT_NEWLINE}*({SLASH}{NEWLINE}))*{NOT_NEWLINE}*
 <COMMENT_ML>\n 		{yymore(); newlines_in_cmnt++;} 
 <COMMENT_ML><<EOF>> {
 					showCmntError("UNFINISHED_COMMENT", cmntStart); 
-					symTable.exitScope();
 					symTable.__print("A");
 					fprintf(logout,"Total lines: %d\nTotal errors: %d\n",num_lines,num_err); 
 					return 0;
@@ -121,7 +120,11 @@ CMNT_SL 		"//"({NOT_NEWLINE}*({SLASH}{NEWLINE}))*{NOT_NEWLINE}*
 
 .					{showError("UNRECOGNIZED_CHAR");}
 
-<<EOF>> 			{fprintf(logout,"Total lines: %d\nTotal errors: %d\n",num_lines,num_err); return 0;}
+<<EOF>> 			{
+					symTable.__print("A");
+					fprintf(logout,"Total lines: %d\nTotal errors: %d\n",num_lines,num_err);
+					return 0;
+					}
 %%
 
 int main(int argc,char *argv[]){
