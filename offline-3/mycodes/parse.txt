@@ -1,0 +1,316 @@
+start
+\program
+ \program
+  \program
+   \program
+    \unit
+     \var_declaration
+      \INT
+       \INT-> int
+      \declaration_list
+       \declaration_list
+        \declaration_list
+         \ID-> x
+        \COMMA-> ,
+        \ID-> y
+       \COMMA-> ,
+       \ID-> z
+      \SEMICOLON-> ;
+   \unit
+    \var_declaration
+     \FLOAT
+      \FLOAT-> float
+     \declaration_list
+      \ID-> a
+     \SEMICOLON-> ;
+  \unit
+   \func_definition
+    \INT
+     \INT-> int
+    \ID-> var
+    \LPAREN-> (
+    \parameter_list
+     \INT
+      \INT-> int
+    \RPAREN-> )
+    \compound_statement
+     \LCURL-> {
+     \RCURL-> }
+ \unit
+  \func_definition
+   \INT
+    \INT-> int
+   \FUNCTION-> main
+   \LPAREN-> (
+   \RPAREN-> )
+   \compound_statement
+    \LCURL-> {
+    \statements
+     \statements
+      \statements
+       \statements
+        \statements
+         \statements
+          \statements
+           \statements
+            \statements
+             \statements
+              \statement
+               \var_declaration
+                \INT
+                 \INT-> int
+                \declaration_list
+                 \declaration_list
+                  \declaration_list
+                   \declaration_list
+                    \ID-> a
+                    \LTHIRD-> [
+                    \CONST_INT-> 2
+                    \RTHIRD-> ]
+                   \COMMA-> ,
+                   \ID-> c
+                  \COMMA-> ,
+                  \ID-> i
+                 \COMMA-> ,
+                 \ID-> j
+                \SEMICOLON-> ;
+             \statement
+              \var_declaration
+               \FLOAT
+                \FLOAT-> float
+               \declaration_list
+                \ID-> d
+               \SEMICOLON-> ;
+            \statement
+             \var_declaration
+              \INT
+               \INT-> int
+              \declaration_list
+               \declaration_list
+                \ID-> x
+               \COMMA-> ,
+               \ID-> z
+              \SEMICOLON-> ;
+           \statement
+            \expression_statement
+             \expression
+              \variable
+               \ID-> x
+              \ASSIGNOP-> =
+              \logic_expression
+               \rel_expression
+                \simple_expression
+                 \term
+                  \unary_expression
+                   \factor
+                    \CONST_INT-> 2
+             \SEMICOLON-> ;
+          \statement
+           \expression_statement
+            \expression
+             \logic_expression
+              \rel_expression
+               \simple_expression
+                \term
+                 \unary_expression
+                  \factor
+                   \variable
+                    \ID-> a
+                    \LTHIRD-> [
+                    \expression
+                     \logic_expression
+                      \rel_expression
+                       \simple_expression
+                        \term
+                         \unary_expression
+                          \factor
+                           \CONST_INT-> 0
+                    \RTHIRD-> ]
+            \SEMICOLON-> ;
+         \statement
+          \expression_statement
+           \expression
+            \variable
+             \ID-> a
+             \LTHIRD-> [
+             \expression
+              \logic_expression
+               \rel_expression
+                \simple_expression
+                 \term
+                  \unary_expression
+                   \factor
+                    \CONST_INT-> 1
+             \RTHIRD-> ]
+            \ASSIGNOP-> =
+            \logic_expression
+             \rel_expression
+              \simple_expression
+               \term
+                \unary_expression
+                 \factor
+                  \CONST_INT-> 5
+           \SEMICOLON-> ;
+        \statement
+         \expression_statement
+          \expression
+           \variable
+            \ID-> i
+           \ASSIGNOP-> =
+           \logic_expression
+            \rel_expression
+             \simple_expression
+              \simple_expression
+               \term
+                \unary_expression
+                 \factor
+                  \variable
+                   \ID-> a
+                   \LTHIRD-> [
+                   \expression
+                    \logic_expression
+                     \rel_expression
+                      \simple_expression
+                       \term
+                        \unary_expression
+                         \factor
+                          \CONST_INT-> 0
+                   \RTHIRD-> ]
+              \ADDOP-> +
+              \term
+               \unary_expression
+                \factor
+                 \variable
+                  \ID-> a
+                  \LTHIRD-> [
+                  \expression
+                   \logic_expression
+                    \rel_expression
+                     \simple_expression
+                      \term
+                       \unary_expression
+                        \factor
+                         \CONST_INT-> 1
+                  \RTHIRD-> ]
+          \SEMICOLON-> ;
+       \statement
+        \expression_statement
+         \expression
+          \variable
+           \ID-> j
+          \ASSIGNOP-> =
+          \logic_expression
+           \rel_expression
+            \simple_expression
+             \simple_expression
+              \term
+               \term
+                \unary_expression
+                 \factor
+                  \CONST_INT-> 2
+               \MULOP-> *
+               \unary_expression
+                \factor
+                 \CONST_INT-> 3
+             \ADDOP-> +
+             \term
+              \unary_expression
+               \factor
+                \LPAREN-> (
+                \expression
+                 \logic_expression
+                  \rel_expression
+                   \simple_expression
+                    \term
+                     \term
+                      \unary_expression
+                       \factor
+                        \CONST_INT-> 5
+                     \MULOP-> %
+                     \unary_expression
+                      \factor
+                       \CONST_INT-> 3
+                   \RELOP-> <
+                   \simple_expression
+                    \term
+                     \unary_expression
+                      \factor
+                       \CONST_INT-> 4
+                  \LOGICOP-> &&
+                  \rel_expression
+                   \simple_expression
+                    \term
+                     \unary_expression
+                      \factor
+                       \CONST_INT-> 8
+                \RPAREN-> )
+           \LOGICOP-> ||
+           \rel_expression
+            \simple_expression
+             \term
+              \unary_expression
+               \factor
+                \CONST_INT-> 2
+         \SEMICOLON-> ;
+      \statement
+       \expression_statement
+        \expression
+         \variable
+          \ID-> d
+         \ASSIGNOP-> =
+         \logic_expression
+          \rel_expression
+           \simple_expression
+            \simple_expression
+             \term
+              \unary_expression
+               \factor
+                \ID-> var
+                \LPAREN-> (
+                \argument_list
+                 \arguments
+                  \arguments
+                   \logic_expression
+                    \rel_expression
+                     \simple_expression
+                      \term
+                       \unary_expression
+                        \factor
+                         \CONST_INT-> 1
+                  \COMMA-> ,
+                  \logic_expression
+                   \rel_expression
+                    \simple_expression
+                     \term
+                      \term
+                       \unary_expression
+                        \factor
+                         \CONST_INT-> 2
+                      \MULOP-> *
+                      \unary_expression
+                       \factor
+                        \CONST_INT-> 3
+                \RPAREN-> )
+            \ADDOP-> +
+            \term
+             \term
+              \unary_expression
+               \factor
+                \CONST_FLOAT-> 3.5
+             \MULOP-> *
+             \unary_expression
+              \factor
+               \CONST_INT-> 2
+        \SEMICOLON-> ;
+     \statement
+      \RETURN-> return
+      \expression
+       \logic_expression
+        \rel_expression
+         \simple_expression
+          \term
+           \unary_expression
+            \factor
+             \CONST_INT-> 0
+      \SEMICOLON-> ;
+    \RCURL-> }

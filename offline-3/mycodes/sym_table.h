@@ -1,5 +1,5 @@
 #include <string>
-#include <stdlib.h>
+#include <sstream>
 #include <fstream>
 #include <iostream>
 #include <bits/stdc++.h>
@@ -7,16 +7,23 @@
 #include <regex>
 using namespace std;
 
-FILE *logout, *tokenout;
-
 //SymbolInfo start
 class SymbolInfo {
 	string name;
 	string type;
 public:
+    string var_type;
+    vector<string>param_v;
+    bool isFunctionDeclaration;
+    bool isFunction;
+
     SymbolInfo* next;
 
-    SymbolInfo(){ this->name = ""; this-> type = ""; this->next = nullptr;}
+    SymbolInfo(){ 
+        this->name = ""; this-> type = ""; this->next = nullptr;
+        isFunctionDeclaration = false;
+        isFunction = false;
+    }
     SymbolInfo(SymbolInfo* nextP){
         this->next = nextP;
     }
@@ -29,6 +36,16 @@ public:
         this->name = ob.name;
         this->type = ob.type;
         this->next = ob.next;
+    }
+    SymbolInfo(string name,string type,string var_type,vector<string>param_v,bool isFunctionDeclaration,bool isFunction, SymbolInfo* nextP = NULL)
+    {
+        this->name = name;
+        this->type = type;
+        this->var_type = var_type;
+        this->param_v = param_v;
+        this->isFunctionDeclaration = isFunctionDeclaration;
+        this->isFunction = isFunction;
+        this->next = nextP;
     }
 	string getName(){
         return name;
@@ -70,6 +87,10 @@ public:
     	}
     
     	return hash;
+    }
+
+    void setVarType(string var_type){
+        this->var_type = var_type;
     }
 };
 //SymbolInfo end
@@ -252,20 +273,20 @@ public:
 
 	int getLLPos(T& ob){return arr[hash(ob)].getPos(ob);} //position in the linked list of the bucket
 
-	void printHashTable();
+	void printHashTable(FILE* fp);
 };
 
 template<typename T>
-void HashTable<T>::printHashTable() {    
+void HashTable<T>::printHashTable(FILE* fp) {    
 	for (int i = 0; i < size; i++) {
         if(arr[i].length() > 0){
-            fprintf(logout, "\t%d--> ", (i+1));
+            fprintf(fp, "\t%d--> ", (i+1));
 
             for (int j = 0; j < arr[i].length(); j++) {
                 arr[i].moveToPos(j);
-                fprintf(logout, "<%s,%s> ", arr[i].getValue().getName().data(), arr[i].getValue().getType().data());
+                fprintf(fp, "<%s,%s> ", arr[i].getValue().getName().data(), arr[i].getValue().getType().data());
             }
-            fprintf(logout, "\n");
+            fprintf(fp, "\n");
         }
 	}
 }
@@ -306,9 +327,9 @@ public:
 
 	bool _delete(  SymbolInfo&  sym){return remove(sym);}
 
-	void print(){
-        fprintf(logout, "\tScopeTable# %d\n", this->count);
-        printHashTable();
+	void print(FILE* fp){
+        fprintf(fp, "\tScopeTable# %d\n", this->count);
+        printHashTable(fp);
     }
 };
 //ScopeTable End
@@ -318,10 +339,12 @@ class SymbolTable {
 	ScopeTable *curr_scope;
 	int max_count;
 	int num_bkt;
+    FILE* fp;
 public:
-	SymbolTable(int num_bkt = 10){
+	SymbolTable(FILE* fp, int num_bkt = 10){
         max_count = 1;
         curr_scope = nullptr;
+        this->fp = fp;
         this->num_bkt = num_bkt;
 
         curr_scope = new ScopeTable(nullptr, 1, num_bkt);
@@ -349,16 +372,16 @@ public:
             }
 	    }
     }
-	bool __insert(   string sym_name,    string sym_type){
+	bool __insert(SymbolInfo sym){
         if (curr_scope == nullptr) return false;
-
-        SymbolInfo sym(sym_name, sym_type);
-
         if (curr_scope->_insert(sym)) return true;
-
-        fprintf(logout, "\t%s already exists in the current ScopeTable\n", sym.getName().data());
-
+        fprintf(fp, "\t%s already exists in the current ScopeTable\n", sym.getName().data());
         return false;
+    }
+
+    bool __insert(   string sym_name,    string sym_type){
+        SymbolInfo sym(sym_name, sym_type);
+        return __insert(sym);
     }
 
 	bool __remove(   string sym_name){
@@ -397,11 +420,11 @@ public:
     void __print(string printType){  //"A" or "C"
 
         if(printType == "C"){
-            curr_scope->print();
+            curr_scope->print(fp);
         }
         else if(printType == "A"){
             for (ScopeTable *p = curr_scope; p; p = p->getParentScope()) {
-                p->print();
+                p->print(fp);
             }
         }
 

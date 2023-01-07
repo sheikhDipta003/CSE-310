@@ -1,0 +1,5 @@
+Line# 3: Syntax error at parameter list of function definition
+Line# 9: Syntax error at declaration list of variable declaration
+Line# 10: Conflicting types for 'a'
+Line# 11: UNRECOGNIZED_CHAR #
+Line# 18: Undeclared function 'var'
