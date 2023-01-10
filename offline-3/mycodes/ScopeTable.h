@@ -41,6 +41,6 @@ struct ScopeTable
     void print(FILE* fp);
 };
 
-#endif // _SCOPETABLE_
+#endif
 
 

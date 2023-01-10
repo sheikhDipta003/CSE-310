@@ -66,36 +66,34 @@ SymbolInfo* ScopeTable::insert(SymbolInfo symObj)
 
     int bkt = hash(lexeme);
 
-    SymbolInfo* to_insert = new SymbolInfo(lexeme,token,data_type,args_list,isFuncDecl,isFunc,isFuncParam,NULL);
-    to_insert->bkt = bkt;
-
-    assert(bkt<size);
+    SymbolInfo* _new = new SymbolInfo(lexeme,token,data_type,args_list,isFuncDecl,isFunc,isFuncParam,NULL);
+    _new->bkt = bkt;
 
     if(hashtable[bkt] == NULL) {
-        hashtable[bkt] = to_insert;
-        to_insert->bkt_pos = 0;
+        hashtable[bkt] = _new;
+        _new->bkt_pos = 0;
     }
     else
     {
         SymbolInfo* sym = hashtable[bkt];
-        if(sym->lexeme == lexeme) return NULL; /*already exists*/
+        if(sym->lexeme == lexeme) return NULL;
 
         int bkt_pos = 1;
 
         while(sym->next != NULL)
         {
             if(sym->lexeme == lexeme)
-                return NULL; /*already exists*/
+                return NULL;
 
             sym = sym->next;
             bkt_pos++;
         }
 
-        to_insert->bkt_pos = bkt_pos;
-        sym->next = to_insert;
+        _new->bkt_pos = bkt_pos;
+        sym->next = _new;
     }
 
-    return to_insert;
+    return _new;
 }
 
 bool ScopeTable::remove(string lexeme)

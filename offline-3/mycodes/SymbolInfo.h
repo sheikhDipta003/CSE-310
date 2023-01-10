@@ -26,4 +26,4 @@ struct SymbolInfo
     void setDataType(string data_type);
 };
 
-#endif // _SYMINFO_
+#endif

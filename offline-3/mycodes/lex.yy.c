@@ -1078,7 +1078,7 @@ YY_RULE_SETUP
 case 9:
 YY_RULE_SETUP
 #line 178 "scanner.l"
-{ SymbolInfo *s= new  SymbolInfo(yytext, "INT"); yylval.symbol_info = s; return INT;}
+{ SymbolInfo *s= new  SymbolInfo(yytext, "INT"); yylval.symInfo = s; return INT;}
 	YY_BREAK
 case 10:
 YY_RULE_SETUP
@@ -1088,7 +1088,7 @@ YY_RULE_SETUP
 case 11:
 YY_RULE_SETUP
 #line 180 "scanner.l"
-{ SymbolInfo *s= new  SymbolInfo(yytext, "FLOAT"); yylval.symbol_info = s; return FLOAT;} 
+{ SymbolInfo *s= new  SymbolInfo(yytext, "FLOAT"); yylval.symInfo = s; return FLOAT;} 
 	YY_BREAK
 case 12:
 YY_RULE_SETUP
@@ -1098,7 +1098,7 @@ YY_RULE_SETUP
 case 13:
 YY_RULE_SETUP
 #line 182 "scanner.l"
-{ SymbolInfo *s= new  SymbolInfo(yytext, "VOID"); yylval.symbol_info = s; return VOID;}
+{ SymbolInfo *s= new  SymbolInfo(yytext, "VOID"); yylval.symInfo = s; return VOID;}
 	YY_BREAK
 case 14:
 YY_RULE_SETUP
@@ -1136,7 +1136,7 @@ YY_RULE_SETUP
 {
 		installID();
 		SymbolInfo *s= new  SymbolInfo(yytext, "ID");
-		yylval.symbol_info = s;
+		yylval.symInfo = s;
 		return ID;
 }
 	YY_BREAK
@@ -1146,7 +1146,7 @@ YY_RULE_SETUP
 {
 				addConstInt();
 				SymbolInfo *s= new  SymbolInfo(yytext, "CONST_INT");
-				yylval.symbol_info = s;
+				yylval.symInfo = s;
 				return CONST_INT;
 			}
 	YY_BREAK
@@ -1156,7 +1156,7 @@ YY_RULE_SETUP
 {
 				addConstFloat();
 				SymbolInfo *s= new  SymbolInfo(yytext, "CONST_FLOAT");
-				yylval.symbol_info = s;
+				yylval.symInfo = s;
 				return CONST_FLOAT;
 			}
 	YY_BREAK
@@ -1167,7 +1167,7 @@ YY_RULE_SETUP
 	showError("TOO_MANY_DECIMAL_POINTS");
 
 	SymbolInfo *s= new  SymbolInfo(yytext, "ERROR_FLOAT");
-	yylval.symbol_info = s;
+	yylval.symInfo = s;
 	return ERROR_FLOAT;
 }
 	YY_BREAK
@@ -1178,7 +1178,7 @@ YY_RULE_SETUP
 	showError("ILLFORMED_NUMBER");
 
 	SymbolInfo *s= new  SymbolInfo(yytext, "ERROR_FLOAT");
-	yylval.symbol_info = s;
+	yylval.symInfo = s;
 	return ERROR_FLOAT;
 }
 	YY_BREAK
@@ -1189,19 +1189,19 @@ YY_RULE_SETUP
 	showError("INVALID_ID_SUFFIX_NUM_PREFIX");
 
 	SymbolInfo *s= new  SymbolInfo(yytext, "ID");
-	yylval.symbol_info = s;
+	yylval.symInfo = s;
 	return ID;
 }
 	YY_BREAK
 case 26:
 YY_RULE_SETUP
 #line 235 "scanner.l"
-{ add_punc_op("ADDOP"); SymbolInfo *s= new  SymbolInfo(yytext, "ADDOP"); yylval.symbol_info = s; return ADDOP;}
+{ add_punc_op("ADDOP"); SymbolInfo *s= new  SymbolInfo(yytext, "ADDOP"); yylval.symInfo = s; return ADDOP;}
 	YY_BREAK
 case 27:
 YY_RULE_SETUP
 #line 236 "scanner.l"
-{ add_punc_op("MULOP"); SymbolInfo *s= new  SymbolInfo(yytext, "MULOP"); yylval.symbol_info = s; return MULOP;}
+{ add_punc_op("MULOP"); SymbolInfo *s= new  SymbolInfo(yytext, "MULOP"); yylval.symInfo = s; return MULOP;}
 	YY_BREAK
 case 28:
 YY_RULE_SETUP
@@ -1216,7 +1216,7 @@ YY_RULE_SETUP
 case 30:
 YY_RULE_SETUP
 #line 240 "scanner.l"
-{ add_punc_op("RELOP"); SymbolInfo *s= new  SymbolInfo(yytext, "RELOP"); yylval.symbol_info = s; return RELOP;}
+{ add_punc_op("RELOP"); SymbolInfo *s= new  SymbolInfo(yytext, "RELOP"); yylval.symInfo = s; return RELOP;}
 	YY_BREAK
 case 31:
 YY_RULE_SETUP
@@ -1226,7 +1226,7 @@ YY_RULE_SETUP
 case 32:
 YY_RULE_SETUP
 #line 242 "scanner.l"
-{ add_punc_op("LOGICOP"); SymbolInfo *s= new  SymbolInfo(yytext, "LOGICOP"); yylval.symbol_info = s; return LOGICOP;}
+{ add_punc_op("LOGICOP"); SymbolInfo *s= new  SymbolInfo(yytext, "LOGICOP"); yylval.symInfo = s; return LOGICOP;}
 	YY_BREAK
 case 33:
 YY_RULE_SETUP
@@ -1279,7 +1279,7 @@ YY_RULE_SETUP
 {
 						addConstChar();
 						SymbolInfo *s = new  SymbolInfo(yytext, "CONST_CHAR");
-						yylval.symbol_info = s;
+						yylval.symInfo = s;
 						return CONST_CHAR;
 					}
 	YY_BREAK
@@ -1289,7 +1289,7 @@ YY_RULE_SETUP
 {
 						showError("MULTICHAR_CONST_CHAR");
 						SymbolInfo *s = new  SymbolInfo(yytext, "ERROR_CHAR");
-						yylval.symbol_info = s;
+						yylval.symInfo = s;
 						return ERROR_CHAR;
 					}
 	YY_BREAK
@@ -1299,7 +1299,7 @@ YY_RULE_SETUP
 {
 						showError("UNFINISHED_CONST_CHAR");
 						SymbolInfo *s = new  SymbolInfo("\0", "ERROR_CHAR");
-						yylval.symbol_info = s;
+						yylval.symInfo = s;
 						return ERROR_CHAR;
 					}
 	YY_BREAK
@@ -1309,7 +1309,7 @@ YY_RULE_SETUP
 {
 						showError("EMPTY_CONST_CHAR");
 						SymbolInfo *s = new  SymbolInfo("\0", "ERROR_CHAR");
-						yylval.symbol_info = s;
+						yylval.symInfo = s;
 						return ERROR_CHAR;
 					}
 	YY_BREAK
@@ -1320,7 +1320,7 @@ YY_RULE_SETUP
 {
 						addString();
 						SymbolInfo *s = new  SymbolInfo(yytext, "STRING");
-						yylval.symbol_info = s;
+						yylval.symInfo = s;
 						return STRING;
 					}
 	YY_BREAK

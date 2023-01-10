@@ -175,11 +175,11 @@ CMNT_SL 		"//"({NOT_NEWLINE}*({SLASH}{NEWLINE}))*{NOT_NEWLINE}*
 "while" {return WHILE;}
 "do" {return DO;}
 "break" {return BREAK;}
-"int" { SymbolInfo *s= new  SymbolInfo(yytext, "INT"); yylval.symbol_info = s; return INT;}
+"int" { SymbolInfo *s= new  SymbolInfo(yytext, "INT"); yylval.symInfo = s; return INT;}
 "char" {return CHAR;}
-"float" { SymbolInfo *s= new  SymbolInfo(yytext, "FLOAT"); yylval.symbol_info = s; return FLOAT;} 
+"float" { SymbolInfo *s= new  SymbolInfo(yytext, "FLOAT"); yylval.symInfo = s; return FLOAT;} 
 "double" {return DOUBLE;}
-"void" { SymbolInfo *s= new  SymbolInfo(yytext, "VOID"); yylval.symbol_info = s; return VOID;}
+"void" { SymbolInfo *s= new  SymbolInfo(yytext, "VOID"); yylval.symInfo = s; return VOID;}
 "return" {return RETURN;}
 "switch" {return SWITCH;}
 "case" {return CASE;}
@@ -190,21 +190,21 @@ CMNT_SL 		"//"({NOT_NEWLINE}*({SLASH}{NEWLINE}))*{NOT_NEWLINE}*
 {ID}	{
 		installID();
 		SymbolInfo *s= new  SymbolInfo(yytext, "ID");
-		yylval.symbol_info = s;
+		yylval.symInfo = s;
 		return ID;
 }
 
 {DIGITS}	{
 				addConstInt();
 				SymbolInfo *s= new  SymbolInfo(yytext, "CONST_INT");
-				yylval.symbol_info = s;
+				yylval.symInfo = s;
 				return CONST_INT;
 			}
 
 {FLOAT}		{
 				addConstFloat();
 				SymbolInfo *s= new  SymbolInfo(yytext, "CONST_FLOAT");
-				yylval.symbol_info = s;
+				yylval.symInfo = s;
 				return CONST_FLOAT;
 			}
 
@@ -212,7 +212,7 @@ CMNT_SL 		"//"({NOT_NEWLINE}*({SLASH}{NEWLINE}))*{NOT_NEWLINE}*
 	showError("TOO_MANY_DECIMAL_POINTS");
 
 	SymbolInfo *s= new  SymbolInfo(yytext, "ERROR_FLOAT");
-	yylval.symbol_info = s;
+	yylval.symInfo = s;
 	return ERROR_FLOAT;
 }
 
@@ -220,7 +220,7 @@ CMNT_SL 		"//"({NOT_NEWLINE}*({SLASH}{NEWLINE}))*{NOT_NEWLINE}*
 	showError("ILLFORMED_NUMBER");
 
 	SymbolInfo *s= new  SymbolInfo(yytext, "ERROR_FLOAT");
-	yylval.symbol_info = s;
+	yylval.symInfo = s;
 	return ERROR_FLOAT;
 }
 
@@ -228,18 +228,18 @@ CMNT_SL 		"//"({NOT_NEWLINE}*({SLASH}{NEWLINE}))*{NOT_NEWLINE}*
 	showError("INVALID_ID_SUFFIX_NUM_PREFIX");
 
 	SymbolInfo *s= new  SymbolInfo(yytext, "ID");
-	yylval.symbol_info = s;
+	yylval.symInfo = s;
 	return ID;
 }
 
-"+"|"-" { add_punc_op("ADDOP"); SymbolInfo *s= new  SymbolInfo(yytext, "ADDOP"); yylval.symbol_info = s; return ADDOP;}
-"*"|"/"|"%"	{ add_punc_op("MULOP"); SymbolInfo *s= new  SymbolInfo(yytext, "MULOP"); yylval.symbol_info = s; return MULOP;}
+"+"|"-" { add_punc_op("ADDOP"); SymbolInfo *s= new  SymbolInfo(yytext, "ADDOP"); yylval.symInfo = s; return ADDOP;}
+"*"|"/"|"%"	{ add_punc_op("MULOP"); SymbolInfo *s= new  SymbolInfo(yytext, "MULOP"); yylval.symInfo = s; return MULOP;}
 "++"	{ add_punc_op("INCOP"); return INCOP;}
 "--"	{ add_punc_op("DECOP"); return DECOP;}
 
-"<"|"<="|">"|">="|"=="|"!="	{ add_punc_op("RELOP"); SymbolInfo *s= new  SymbolInfo(yytext, "RELOP"); yylval.symbol_info = s; return RELOP;}
+"<"|"<="|">"|">="|"=="|"!="	{ add_punc_op("RELOP"); SymbolInfo *s= new  SymbolInfo(yytext, "RELOP"); yylval.symInfo = s; return RELOP;}
 "="	{ add_punc_op("ASSIGNOP"); return ASSIGNOP;}
-"&&"|"||"	{ add_punc_op("LOGICOP"); SymbolInfo *s= new  SymbolInfo(yytext, "LOGICOP"); yylval.symbol_info = s; return LOGICOP;}
+"&&"|"||"	{ add_punc_op("LOGICOP"); SymbolInfo *s= new  SymbolInfo(yytext, "LOGICOP"); yylval.symInfo = s; return LOGICOP;}
 "!"	{add_punc_op("NOT"); return NOT;}
 
 "("	{ add_punc_op("LPAREN"); return LPAREN;}
@@ -255,25 +255,25 @@ CMNT_SL 		"//"({NOT_NEWLINE}*({SLASH}{NEWLINE}))*{NOT_NEWLINE}*
 ({CHAR}|{ESC})		{
 						addConstChar();
 						SymbolInfo *s = new  SymbolInfo(yytext, "CONST_CHAR");
-						yylval.symbol_info = s;
+						yylval.symInfo = s;
 						return CONST_CHAR;
 					}
 {INVALID_CHAR}  	{
 						showError("MULTICHAR_CONST_CHAR");
 						SymbolInfo *s = new  SymbolInfo(yytext, "ERROR_CHAR");
-						yylval.symbol_info = s;
+						yylval.symInfo = s;
 						return ERROR_CHAR;
 					}
 {UNF_CHAR}			{
 						showError("UNFINISHED_CONST_CHAR");
 						SymbolInfo *s = new  SymbolInfo("\0", "ERROR_CHAR");
-						yylval.symbol_info = s;
+						yylval.symInfo = s;
 						return ERROR_CHAR;
 					}
 {EMP_CHAR}			{
 						showError("EMPTY_CONST_CHAR");
 						SymbolInfo *s = new  SymbolInfo("\0", "ERROR_CHAR");
-						yylval.symbol_info = s;
+						yylval.symInfo = s;
 						return ERROR_CHAR;
 					}
 
@@ -281,7 +281,7 @@ CMNT_SL 		"//"({NOT_NEWLINE}*({SLASH}{NEWLINE}))*{NOT_NEWLINE}*
 {STR}				{
 						addString();
 						SymbolInfo *s = new  SymbolInfo(yytext, "STRING");
-						yylval.symbol_info = s;
+						yylval.symInfo = s;
 						return STRING;
 					}
 {UNF_STR}			{showError("UNFINISHED_STRING");}

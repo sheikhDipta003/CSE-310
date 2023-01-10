@@ -31,93 +31,92 @@ int yylex(void);
 
 SymbolTable *sym_tab = new SymbolTable(10);
 
-bool is_function_now = false;
-vector<SymbolInfo>function_params;
+bool curr_ID_func = false;
+vector<SymbolInfo> temp_param_list;
 
 
-string do_implicit_typecast(char* left_op, char* right_op)
+string typecast(char* left, char* right)
 {
-    if(!strcmp(left_op,"NULL") || !strcmp(right_op,"NULL")) return "NULL";
+    if(!strcmp(left,"NULL") || !strcmp(right,"NULL")) return "NULL";
 
-    if(!strcmp(left_op,"void") || !strcmp(right_op,"void")) return "error";
+    if(!strcmp(left,"void") || !strcmp(right,"void")) return "error";
 
-    if((!strcmp(left_op,"float") || !strcmp(left_op,"float_array")) && (!strcmp(right_op,"float") || !strcmp(right_op,"float_array"))) return "float";
-    if((!strcmp(left_op,"float") || !strcmp(left_op,"float_array")) && (!strcmp(right_op,"int") || !strcmp(right_op,"int_array"))) return "float";
-    if((!strcmp(left_op,"int") || !strcmp(left_op,"int_array")) && (!strcmp(right_op,"float") || !strcmp(right_op,"float_array"))) return "float";
-    if((!strcmp(left_op,"int") || !strcmp(left_op,"int_array")) && (!strcmp(right_op,"int") || !strcmp(right_op,"int_array"))) return "int";
+    if((!strcmp(left,"float") || !strcmp(left,"float_array")) && (!strcmp(right,"float") || !strcmp(right,"float_array"))) return "float";
+    if((!strcmp(left,"float") || !strcmp(left,"float_array")) && (!strcmp(right,"int") || !strcmp(right,"int_array"))) return "float";
+    if((!strcmp(left,"int") || !strcmp(left,"int_array")) && (!strcmp(right,"float") || !strcmp(right,"float_array"))) return "float";
+    if((!strcmp(left,"int") || !strcmp(left,"int_array")) && (!strcmp(right,"int") || !strcmp(right,"int_array"))) return "int";
 
     return "error";
 }
 
-bool is_param_typecast_ok(string og_p,string pass_p)
+bool is_typecast_valid(string required,string given)
 {
-    if(og_p == "void") return pass_p == "void";
-    if(og_p == "int") return (pass_p == "int" || pass_p == "int_array");
-    if(og_p == "float") return pass_p == "float";
+    if(required == "void") return given == "void";
+    if(required == "int") return (given == "int" || given == "int_array");
+    if(required == "float") return given == "float";
 }
 
-bool check_assignop(char* left_op, char* right_op)
+bool is_assignment_valid(char* left, char* right)
 {
-    if(!strcmp(left_op,"NULL") || !strcmp(right_op,"NULL")) return true; 
+    if(!strcmp(left,"NULL") || !strcmp(right,"NULL")) return true; 
 
-    if(!strcmp(left_op,"void") || !strcmp(right_op,"void")) return false;
-    if(!strcmp(left_op,"") || !strcmp(right_op,"")) return false;
+    if(!strcmp(left,"void") || !strcmp(right,"void")) return false;
+    if(!strcmp(left,"") || !strcmp(right,"")) return false;
 
-    if((!strcmp(left_op,"int") || !strcmp(left_op,"int_array")) && (!strcmp(right_op,"int") || !strcmp(right_op,"int_array"))) return true;
-    
-    if((!strcmp(left_op,"float") || !strcmp(left_op,"float_array")) && strcmp(right_op,"void")) return true;
+    if((!strcmp(left,"int") || !strcmp(left,"int_array")) && (!strcmp(right,"int") || !strcmp(right,"int_array"))) return true;
+    if((!strcmp(left,"float") || !strcmp(left,"float_array")) && strcmp(right,"void")) return true;
 
     return false;
 }
 
-void print_grammar_rule(string head,string body)
+void print_rule(string head,string body)
 {
     fprintf(logout, "%s : %s\n", head.data(), body.data());
 }
 
-void error_multiple_declaration(string error_symbol, bool _isFunc)
+void mult_declaration_error(string error_symbol, bool _isFunc)
 {
     if(_isFunc) fprintf(errout, "Line# %d: Redefinition of parameter \'%s\'\n", line_count, error_symbol.data());
     else    fprintf(errout, "Line# %d: \'%s\' redeclared as different kind of symbol\n", line_count, error_symbol.data());
     err_count++;
 }
 
-void error_type_cast()
+void typecast_error()
 {
     fprintf(errout, "Line# %d: Incompatible Operand\n", line_count);
     err_count++;
 }
 
-void error_type_cast_void()
+void void_expression_error()
 {
     fprintf(errout, "Line# %d: Void cannot be used in expression\n", line_count);
     err_count++;
 }
 
-void error_type_mismatch(string msg)
+void type_conflict_error(string msg)
 {
     fprintf(errout, "Line# %d: Conflicting types for \'%s\'\n", line_count, msg.data());
     err_count++;
 }
 
-typedef struct tnode {
-    char valname[100];
+typedef struct ptnode {
+    char value[100];
     char token[100];
-    char HelperType[100];
+    char resultType[100];
     vector<string> args_list;
-    vector<SymbolInfo*> v;
+    vector<SymbolInfo*> args_info_list;
 	bool lastchild;
-	struct tnode *child;
-    struct tnode *ptr;
-} tnode;
+	struct ptnode *child;
+    struct ptnode *leaf;
+} ptnode;
 
-tnode *NTnode=NULL;
-int numWS = 0;
+ptnode *Root=NULL;
 string output = "\n";
+int numWS = 0;
 
-void printtree(tnode *node)
+void printtree(ptnode *node)
 {
-    tnode *itr;
+    ptnode *itr;
 
     for(int i=1;i<numWS;i++)   fprintf(parseout, " ");
 
@@ -125,8 +124,8 @@ void printtree(tnode *node)
 
     if(node->lastchild)
     {
-        fprintf(parseout, "%s-> %s\n", node->token, node->valname);
-        output.append(node->valname);
+        fprintf(parseout, "%s-> %s\n", node->token, node->value);
+        output.append(node->value);
         output.append(" ");
     }
     else
@@ -137,89 +136,87 @@ void printtree(tnode *node)
         numWS++;
     }
 
-    for(itr = node->child; itr != NULL; itr = itr->ptr)
-    printtree(itr);
+    for(itr = node->child; itr != NULL; itr = itr->leaf) printtree(itr);
 
-    if(node->lastchild==0)
-    numWS--;
+    if(node->lastchild==0) numWS--;
 }
 
-tnode* CreateTnode()
+ptnode* getNewNode()
 {
-    tnode *t = new struct tnode();
-    t->ptr = NULL;
+    ptnode *t = new struct ptnode();
+    t->leaf = NULL;
     t->child = NULL;
     t->lastchild = 0;
 
     strcpy(t->token, "");
-    strcpy(t->valname, "");
-    strcpy(t->HelperType, "");
+    strcpy(t->value, "");
+    strcpy(t->resultType, "");
 
     return(t);
 }
 
-tnode* ProgramNode(tnode* push, tnode* t)
+ptnode* makeChildNode(ptnode* to_insert, ptnode* root)
 {
-	if(t->child  ==  NULL)
-		t->child = push;
+	if(root->child  ==  NULL)
+		root->child = to_insert;
 	else
 	{
-		tnode *itr;
-		for(itr = t->child; itr->ptr != NULL; itr = itr->ptr);
-		itr->ptr = push;
+		ptnode *itr;
+		for(itr = root->child; itr->leaf != NULL; itr = itr->leaf);
+		itr->leaf = to_insert;
 	}
-	return(t);
+	return(root);
 }
 
-tnode* ProgramNode(SymbolInfo* sym, tnode* t)
+ptnode* makeChildNode(SymbolInfo* sym, ptnode* root)
 {
-	tnode *push = CreateTnode();
-	push->lastchild = 1;
-	strcpy(push->valname, sym->lexeme.c_str());
-	strcpy(push->token, sym->token.c_str());
-	t = ProgramNode(push,t);
+	ptnode *to_insert = getNewNode();
+	to_insert->lastchild = 1;
+	strcpy(to_insert->value, sym->lexeme.c_str());
+	strcpy(to_insert->token, sym->token.c_str());
+	root = makeChildNode(to_insert, root);
+	return (root);
+}
+
+ptnode* makeChildNode(string value, string token, ptnode* root)
+{
+	ptnode *to_insert = getNewNode();
+	to_insert->lastchild = 1;
+	strcpy(to_insert->value, value.c_str());
+	strcpy(to_insert->token, token.c_str());
+	root = makeChildNode(to_insert, root);
+	return (root);
+}
+
+ptnode* makeChildNode(string token, ptnode* t)
+{
+	ptnode *to_insert = getNewNode();
+	to_insert->lastchild = 1;
+    if(token == "LPAREN")   strcpy(to_insert->value, "(");
+    else if(token == "RPAREN")  strcpy(to_insert->value, ")");
+    else if(token == "COMMA")  strcpy(to_insert->value, ",");
+    else if(token == "SEMICOLON")  strcpy(to_insert->value, ";");
+    else if(token == "LCURL")  strcpy(to_insert->value, "{");
+    else if(token == "RCURL")  strcpy(to_insert->value, "}");
+    else if(token == "LTHIRD")  strcpy(to_insert->value, "[");
+    else if(token == "RTHIRD")  strcpy(to_insert->value, "]");
+    else if(token == "NOT")  strcpy(to_insert->value, "!");
+    else if(token == "ASSIGNOP")  strcpy(to_insert->value, "=");
+    else if(token == "DECOP")  strcpy(to_insert->value, "--");
+    else if(token == "INCOP")  strcpy(to_insert->value, "++");
+    else if(token == "RETURN")  strcpy(to_insert->value, "return");
+	strcpy(to_insert->token, token.c_str());
+	t = makeChildNode(to_insert,t);
 	return (t);
 }
 
-tnode* ProgramNode(string valname, string token, tnode* t)
-{
-	tnode *push = CreateTnode();
-	push->lastchild = 1;
-	strcpy(push->valname, valname.c_str());
-	strcpy(push->token, token.c_str());
-	t = ProgramNode(push,t);
-	return (t);
-}
-
-tnode* ProgramNode(string token, tnode* t)
-{
-	tnode *push = CreateTnode();
-	push->lastchild = 1;
-    if(token == "LPAREN")   strcpy(push->valname, "(");
-    else if(token == "RPAREN")  strcpy(push->valname, ")");
-    else if(token == "COMMA")  strcpy(push->valname, ",");
-    else if(token == "SEMICOLON")  strcpy(push->valname, ";");
-    else if(token == "LCURL")  strcpy(push->valname, "{");
-    else if(token == "RCURL")  strcpy(push->valname, "}");
-    else if(token == "LTHIRD")  strcpy(push->valname, "[");
-    else if(token == "RTHIRD")  strcpy(push->valname, "]");
-    else if(token == "NOT")  strcpy(push->valname, "!");
-    else if(token == "ASSIGNOP")  strcpy(push->valname, "=");
-    else if(token == "DECOP")  strcpy(push->valname, "--");
-    else if(token == "INCOP")  strcpy(push->valname, "++");
-    else if(token == "RETURN")  strcpy(push->valname, "return");
-	strcpy(push->token, token.c_str());
-	t = ProgramNode(push,t);
-	return (t);
-}
-
-void insert_function_to_global(SymbolInfo* temp_s,char* data_type)
+void insert_to_symtable(SymbolInfo* sym,char* data_type)
 {
     bool isParamListError = false;
 
-    for(int i=0;i<function_params.size();i++)
+    for(int i=0;i<temp_param_list.size();i++)
     {
-        if(function_params[i].lexeme == "dummy_key"){
+        if(temp_param_list[i].lexeme == "dummy_key"){
             fprintf(errout, "Line# %d: Syntax error at parameter list of function definition\n", line_count);
             err_count++;
             isParamListError = true;
@@ -229,39 +226,39 @@ void insert_function_to_global(SymbolInfo* temp_s,char* data_type)
 
     if(!isParamListError){
         
-        temp_s->token = "FUNCTION";
-        temp_s->data_type = data_type;
-        temp_s->isFunc = true;
+        sym->token = "FUNCTION";
+        sym->data_type = data_type;
+        sym->isFunc = true;
 
-        for(auto temp_p : function_params)
+        for(auto param : temp_param_list)
         {
-            temp_s->args_list.push_back(temp_p.data_type);
+            sym->args_list.push_back(param.data_type);
         }
 
-        if(!sym_tab->_insert(*temp_s))
+        if(!sym_tab->_insert(*sym))
         {
-            SymbolInfo* ret_symbol = sym_tab->_search(temp_s->lexeme);
+            SymbolInfo* ret_symbol = sym_tab->_search(sym->lexeme);
 
             if(ret_symbol->isFuncDecl == false){
-                error_multiple_declaration(temp_s->lexeme, ret_symbol->isFuncParam);
+                mult_declaration_error(sym->lexeme, ret_symbol->isFuncParam);
             }
             else{
-                if(ret_symbol->data_type != temp_s->data_type)
+                if(ret_symbol->data_type != sym->data_type)
                 {
-                    fprintf(errout, "Line# %d: Conflicting types for \'%s\'\n", line_count, (temp_s->lexeme).data());
+                    fprintf(errout, "Line# %d: Conflicting types for \'%s\'\n", line_count, (sym->lexeme).data());
                     err_count++;
                 }
 
-                if(ret_symbol->args_list.size() != temp_s->args_list.size())
+                if(ret_symbol->args_list.size() != sym->args_list.size())
                 {
-                    error_type_mismatch(temp_s->lexeme);
+                    type_conflict_error(sym->lexeme);
                 }
                 else
                 {
                     for(int i = 0; i < (ret_symbol->args_list.size()); i++)
                     {
-                        if(ret_symbol->args_list[i] != temp_s->args_list[i]){
-                            error_type_mismatch(temp_s->lexeme);
+                        if(ret_symbol->args_list[i] != sym->args_list[i]){
+                            type_conflict_error(sym->lexeme);
                         }
                     }
                 }
@@ -269,31 +266,28 @@ void insert_function_to_global(SymbolInfo* temp_s,char* data_type)
             }
         }
         else{
-            SymbolInfo* ret_symbol = sym_tab->_search(temp_s->lexeme);
+            SymbolInfo* ret_symbol = sym_tab->_search(sym->lexeme);
             ret_symbol->isFuncDecl = false;
         }
     }
-
-    
 }
 
 %}
 
 
 %union{
-    SymbolInfo* symbol_info;
+    SymbolInfo* symInfo;
     char* string;
-    struct tnode *node;
+    struct ptnode *node;
 }
 
 
 %token <string> IF ELSE LOWER_THAN_ELSE FOR WHILE DO BREAK CHAR DOUBLE RETURN SWITCH CASE DEFAULT CONTINUE PRINTLN INCOP DECOP ASSIGNOP NOT LPAREN RPAREN LCURL RCURL LTHIRD RTHIRD COMMA SEMICOLON
-%token <symbol_info> ID INT FLOAT VOID ADDOP MULOP RELOP LOGICOP CONST_CHAR CONST_INT CONST_FLOAT STRING ERROR_CHAR ERROR_FLOAT  
+%token <symInfo> ID INT FLOAT VOID ADDOP MULOP RELOP LOGICOP CONST_CHAR CONST_INT CONST_FLOAT STRING ERROR_CHAR ERROR_FLOAT  
 
 %type <node> start program unit variable var_declaration type_specifier func_declaration func_definition parameter_list
 %type <node> expression factor unary_expression term simple_expression rel_expression statement statements compound_statement logic_expression expression_statement
-%type <node> arguments argument_list
-%type <node> declaration_list
+%type <node> arguments argument_list declaration_list
 
 %nonassoc LOWER_THAN_ELSE
 %nonassoc ELSE
@@ -304,231 +298,219 @@ start: program
 	{
 		//write your code in this block in all the similar blocks below
 
-        print_grammar_rule("start","program");
+        print_rule("start","program");
 
-        NTnode = CreateTnode();
-        strcpy(NTnode->token,"start");
-        NTnode = ProgramNode($1,NTnode);
+        Root = getNewNode();
+        strcpy(Root->token,"start");
+        Root = makeChildNode($1,Root);
 	}
 	;
 
 program: program unit  {
-            print_grammar_rule("program","program unit");
-            tnode *a = CreateTnode();
+            print_rule("program","program unit");
+            ptnode *a = getNewNode();
             strcpy(a->token,"program");
-            a=ProgramNode($1,a);
-            a=ProgramNode($2,a);
+            a=makeChildNode($1,a);
+            a=makeChildNode($2,a);
             $$ = a;
         }
 	| unit { 
-            print_grammar_rule("program","unit");
-            tnode *a = CreateTnode();
+            print_rule("program","unit");
+            ptnode *a = getNewNode();
             strcpy(a->token,"program");
-            a=ProgramNode($1,a);
+            a=makeChildNode($1,a);
             $$ = a;
         }
 	;
 	
 unit: var_declaration { 
-            print_grammar_rule("unit","var_declaration"); 
-            tnode *a = CreateTnode();
+            print_rule("unit","var_declaration"); 
+            ptnode *a = getNewNode();
             strcpy(a->token,"unit");
-            a=ProgramNode($1,a);
+            a=makeChildNode($1,a);
             $$ = a;
         }
      | func_declaration { 
-            print_grammar_rule("unit","func_declaration"); 
-            tnode *a = CreateTnode();
+            print_rule("unit","func_declaration"); 
+            ptnode *a = getNewNode();
             strcpy(a->token,"unit");
-            a=ProgramNode($1,a);
+            a=makeChildNode($1,a);
             $$ = a;
         }
      | func_definition { 
-            print_grammar_rule("unit","func_definition");
-            tnode *a = CreateTnode();
+            print_rule("unit","func_definition");
+            ptnode *a = getNewNode();
             strcpy(a->token,"unit");
-            a=ProgramNode($1,a);
+            a=makeChildNode($1,a);
             $$ = a;
         }
      ;
      
 func_declaration: type_specifier ID LPAREN parameter_list RPAREN SEMICOLON {  
-                print_grammar_rule("func_declaration","type_specifier ID LPAREN parameter_list RPAREN SEMICOLON");
+                print_rule("func_declaration","type_specifier ID LPAREN parameter_list RPAREN SEMICOLON");
 
-                tnode *a = CreateTnode();
+                ptnode *a = getNewNode();
                 strcpy(a->token,"func_declaration");
-                a=ProgramNode($1,a);
-                a=ProgramNode($2,a);
-                a=ProgramNode("LPAREN", a);
-                a=ProgramNode($4,a);
-                a=ProgramNode("RPAREN", a);
-                a=ProgramNode("SEMICOLON", a);
+                a=makeChildNode($1,a);
+                a=makeChildNode($2,a);
+                a=makeChildNode("LPAREN", a);
+                a=makeChildNode($4,a);
+                a=makeChildNode("RPAREN", a);
+                a=makeChildNode("SEMICOLON", a);
                 $$ = a;        
 
-                // insert function ID to SymbolTable with data_type
                 $2->setDataType($1->token);
                 $2->token = "FUNCTION";
                 $2->isFunc = true;
 
-                // update parameter type
-                for(auto temp_s : function_params)
+
+                for(auto sym : temp_param_list)
                 {
-                    $2->args_list.push_back(temp_s.data_type);
+                    $2->args_list.push_back(sym.data_type);
                 }
                 
                 if(sym_tab->_insert(*$2))
                 {
                     SymbolInfo* ret_symbol = sym_tab->_search($2->lexeme);
-                    ret_symbol->isFuncDecl = true; // mark as function declaration
+                    ret_symbol->isFuncDecl = true;
                 }
                 else
                 {
                     SymbolInfo* ret_symbol = sym_tab->_search($2->lexeme);
-                    error_multiple_declaration($2->lexeme, ret_symbol->isFuncParam);
+                    mult_declaration_error($2->lexeme, ret_symbol->isFuncParam);
                 }
 
-                // clear param_info
-                function_params.clear();
+
+                temp_param_list.clear();
         }
         | type_specifier ID LPAREN parameter_list RPAREN error { 
                 
-                print_grammar_rule("func_declaration","type_specifier ID LPAREN parameter_list RPAREN");
+                print_rule("func_declaration","type_specifier ID LPAREN parameter_list RPAREN");
 
-                tnode *a = CreateTnode();
+                ptnode *a = getNewNode();
                 strcpy(a->token,"func_declaration");
-                a=ProgramNode($1,a);
-                a=ProgramNode($2,a);
-                a=ProgramNode("LPAREN", a);
-                a=ProgramNode($4,a);
-                a=ProgramNode("RPAREN", a);
+                a=makeChildNode($1,a);
+                a=makeChildNode($2,a);
+                a=makeChildNode("LPAREN", a);
+                a=makeChildNode($4,a);
+                a=makeChildNode("RPAREN", a);
                 $$ = a;
 
-                // insert function ID to SymbolTable with data_type
+
                 $2->setDataType($1->token);
                 $2->token = "FUNCTION";
                 $2->isFunc = true;
 
-                // update parameter type
-                for(auto temp_s : function_params)
+
+                for(auto sym : temp_param_list)
                 {
-                    $2->args_list.push_back(temp_s.data_type);
+                    $2->args_list.push_back(sym.data_type);
                 }
 
                 if(sym_tab->_insert(*$2))
                 {
                     SymbolInfo* ret_symbol = sym_tab->_search($2->lexeme);
-                    ret_symbol->isFuncDecl = true; // mark as function declaration
+                    ret_symbol->isFuncDecl = true;
                 }
                 else
                 {
                     SymbolInfo* ret_symbol = sym_tab->_search($2->lexeme);
-                    error_multiple_declaration($2->lexeme, ret_symbol->isFuncParam);
+                    mult_declaration_error($2->lexeme, ret_symbol->isFuncParam);
                 }
 
-                // clear param_info
-                function_params.clear();    
+
+                temp_param_list.clear();    
         }
         | type_specifier ID LPAREN parameter_list error RPAREN SEMICOLON { 
+                print_rule("func_declaration","type_specifier ID LPAREN parameter_list RPAREN SEMICOLON");
 
-                /**
-                    To handle errors like: 
-                        void foo(int x-y);
-                **/
-                
-                print_grammar_rule("func_declaration","type_specifier ID LPAREN parameter_list RPAREN SEMICOLON");
-
-                tnode *a = CreateTnode();
+                ptnode *a = getNewNode();
                 strcpy(a->token,"func_declaration");
-                a=ProgramNode($1,a);
-                a=ProgramNode($2,a);
-                a=ProgramNode("LPAREN", a);
-                a=ProgramNode($4,a);
-                a=ProgramNode("RPAREN", a);
-                a=ProgramNode("SEMICOLON", a);
+                a=makeChildNode($1,a);
+                a=makeChildNode($2,a);
+                a=makeChildNode("LPAREN", a);
+                a=makeChildNode($4,a);
+                a=makeChildNode("RPAREN", a);
+                a=makeChildNode("SEMICOLON", a);
                 $$ = a;
 
-                // insert function ID to SymbolTable with data_type
+
                 $2->setDataType($1->token);
                 $2->token = "FUNCTION";
                 $2->isFunc = true;
 
-                // update parameter type
-                for(auto temp_s : function_params)
+
+                for(auto sym : temp_param_list)
                 {
-                    $2->args_list.push_back(temp_s.data_type);
+                    $2->args_list.push_back(sym.data_type);
                 }
 
                 if(sym_tab->_insert(*$2))
                 {
                     SymbolInfo* ret_symbol = sym_tab->_search($2->lexeme);
-                    ret_symbol->isFuncDecl = true; // mark as function declaration
+                    ret_symbol->isFuncDecl = true;
                 }
                 else
                 {
                     SymbolInfo* ret_symbol = sym_tab->_search($2->lexeme);
-                    error_multiple_declaration($2->lexeme, ret_symbol->isFuncParam);
+                    mult_declaration_error($2->lexeme, ret_symbol->isFuncParam);
                 }
 
-                // clear param_info
-                function_params.clear();
+
+                temp_param_list.clear();
         }
         | type_specifier ID LPAREN parameter_list error RPAREN error { 
-
-                /**
-                    To handle errors like: 
-                        void foo(int x-y)
-                **/
                 
-                print_grammar_rule("func_declaration","type_specifier ID LPAREN parameter_list RPAREN");
+                print_rule("func_declaration","type_specifier ID LPAREN parameter_list RPAREN");
 
-                tnode *a = CreateTnode();
+                ptnode *a = getNewNode();
                 strcpy(a->token,"func_declaration");
-                a=ProgramNode($1,a);
-                a=ProgramNode($2,a);
-                a=ProgramNode("LPAREN", a);
-                a=ProgramNode($4,a);
-                a=ProgramNode("RPAREN", a);
+                a=makeChildNode($1,a);
+                a=makeChildNode($2,a);
+                a=makeChildNode("LPAREN", a);
+                a=makeChildNode($4,a);
+                a=makeChildNode("RPAREN", a);
                 $$ = a;
 
-                // insert function ID to SymbolTable with data_type
+
                 $2->setDataType($1->token);
                 $2->token = "FUNCTION";
                 $2->isFunc = true;
 
-                // update parameter type
-                for(auto temp_s : function_params)
+
+                for(auto sym : temp_param_list)
                 {
-                    $2->args_list.push_back(temp_s.data_type);
+                    $2->args_list.push_back(sym.data_type);
                 }
 
                 if(sym_tab->_insert(*$2))
                 {
                     SymbolInfo* ret_symbol = sym_tab->_search($2->lexeme);
-                    ret_symbol->isFuncDecl = true; // mark as function declaration
+                    ret_symbol->isFuncDecl = true;
                 }
                 else
                 {
                     SymbolInfo* ret_symbol = sym_tab->_search($2->lexeme);
-                    error_multiple_declaration($2->lexeme, ret_symbol->isFuncParam);
+                    mult_declaration_error($2->lexeme, ret_symbol->isFuncParam);
                 }
 
-                // clear param_info
-                function_params.clear();
+
+                temp_param_list.clear();
         }
 		| type_specifier ID LPAREN RPAREN SEMICOLON { 
 
-                print_grammar_rule("func_declaration","type_specifier ID LPAREN RPAREN SEMICOLON");
+                print_rule("func_declaration","type_specifier ID LPAREN RPAREN SEMICOLON");
 
-                tnode *a = CreateTnode();
+                ptnode *a = getNewNode();
                 strcpy(a->token,"func_declaration");
-                a=ProgramNode($1,a);
-                a=ProgramNode($2,a);
-                a=ProgramNode("LPAREN", a);
-                a=ProgramNode("RPAREN", a);
-                a=ProgramNode("SEMICOLON", a);
+                a=makeChildNode($1,a);
+                a=makeChildNode($2,a);
+                a=makeChildNode("LPAREN", a);
+                a=makeChildNode("RPAREN", a);
+                a=makeChildNode("SEMICOLON", a);
                 $$ = a;
 
-                // insert function ID to SymbolTable with data_type
+
                 $2->setDataType($1->token);
                 $2->token = "FUNCTION";
                 $2->isFunc = true;
@@ -536,31 +518,26 @@ func_declaration: type_specifier ID LPAREN parameter_list RPAREN SEMICOLON {
                 if(sym_tab->_insert(*$2))
                 {
                     SymbolInfo* ret_symbol = sym_tab->_search($2->lexeme);
-                    ret_symbol->isFuncDecl = true; // mark as function declaration
+                    ret_symbol->isFuncDecl = true;
                 }
                 else
                 {
                     SymbolInfo* ret_symbol = sym_tab->_search($2->lexeme);
-                    error_multiple_declaration($2->lexeme, ret_symbol->isFuncParam);
+                    mult_declaration_error($2->lexeme, ret_symbol->isFuncParam);
                 }
 
-                function_params.clear();
+                temp_param_list.clear();
             }
             | type_specifier ID LPAREN RPAREN error { 
 
-                /**
-                    To handle errors like: 
-                        void foo()
-                **/
+            print_rule("func_declaration","type_specifier ID LPAREN RPAREN");
 
-            print_grammar_rule("func_declaration","type_specifier ID LPAREN RPAREN");
-
-            tnode *a = CreateTnode();
+            ptnode *a = getNewNode();
             strcpy(a->token,"func_declaration");
-            a=ProgramNode($1,a);
-            a=ProgramNode($2,a);
-            a=ProgramNode("LPAREN", a);
-            a=ProgramNode("RPAREN", a);
+            a=makeChildNode($1,a);
+            a=makeChildNode($2,a);
+            a=makeChildNode("LPAREN", a);
+            a=makeChildNode("RPAREN", a);
             $$ = a;
 
             // insert function ID to SymbolTable with data_type
@@ -571,35 +548,30 @@ func_declaration: type_specifier ID LPAREN parameter_list RPAREN SEMICOLON {
             if(sym_tab->_insert(*$2))
             {
                 SymbolInfo* ret_symbol = sym_tab->_search($2->lexeme);
-                ret_symbol->isFuncDecl = true; // mark as function declaration
+                ret_symbol->isFuncDecl = true;
             }
             else
             {
                 SymbolInfo* ret_symbol = sym_tab->_search($2->lexeme);
-                error_multiple_declaration($2->lexeme, ret_symbol->isFuncParam);
+                mult_declaration_error($2->lexeme, ret_symbol->isFuncParam);
             }
 
-            function_params.clear();
+            temp_param_list.clear();
         }
         | type_specifier ID LPAREN error RPAREN SEMICOLON { 
 
-                /**
-                    To handle errors like: 
-                        void foo(-);
-                **/
+                print_rule("func_declaration","type_specifier ID LPAREN RPAREN SEMICOLON");
 
-                print_grammar_rule("func_declaration","type_specifier ID LPAREN RPAREN SEMICOLON");
-
-                tnode *a = CreateTnode();
+                ptnode *a = getNewNode();
                 strcpy(a->token,"func_declaration");
-                a=ProgramNode($1,a);
-                a=ProgramNode($2,a);
-                a=ProgramNode("LPAREN", a);
-                a=ProgramNode("RPAREN", a);
-                a=ProgramNode("SEMICOLON", a);
+                a=makeChildNode($1,a);
+                a=makeChildNode($2,a);
+                a=makeChildNode("LPAREN", a);
+                a=makeChildNode("RPAREN", a);
+                a=makeChildNode("SEMICOLON", a);
                 $$ = a;
 
-                // insert function ID to SymbolTable with data_type
+
                 $2->setDataType($1->token);
                 $2->token = "FUNCTION";
                 $2->isFunc = true;
@@ -607,34 +579,28 @@ func_declaration: type_specifier ID LPAREN parameter_list RPAREN SEMICOLON {
                 if(sym_tab->_insert(*$2))
                 {
                     SymbolInfo* ret_symbol = sym_tab->_search($2->lexeme);
-                    ret_symbol->isFuncDecl = true; // mark as function declaration
+                    ret_symbol->isFuncDecl = true;
                 }
                 else
                 {
                     SymbolInfo* ret_symbol = sym_tab->_search($2->lexeme);
-                    error_multiple_declaration($2->lexeme, ret_symbol->isFuncParam);
+                    mult_declaration_error($2->lexeme, ret_symbol->isFuncParam);
                 }
 
-                function_params.clear();
+                temp_param_list.clear();
             }
         | type_specifier ID LPAREN error RPAREN error { 
+                print_rule("func_declaration","type_specifier ID LPAREN RPAREN");
 
-                /**
-                    To handle errors like: 
-                        void foo(-)
-                **/
-
-                print_grammar_rule("func_declaration","type_specifier ID LPAREN RPAREN");
-
-                tnode *a = CreateTnode();
+                ptnode *a = getNewNode();
                 strcpy(a->token,"func_declaration");
-                a=ProgramNode($1,a);
-                a=ProgramNode($2,a);
-                a=ProgramNode("LPAREN", a);
-                a=ProgramNode("RPAREN", a);
+                a=makeChildNode($1,a);
+                a=makeChildNode($2,a);
+                a=makeChildNode("LPAREN", a);
+                a=makeChildNode("RPAREN", a);
                 $$ = a;
 
-                // insert function ID to SymbolTable with data_type
+
                 $2->setDataType($1->token);
                 $2->token = "FUNCTION";
                 $2->isFunc = true;
@@ -642,95 +608,82 @@ func_declaration: type_specifier ID LPAREN parameter_list RPAREN SEMICOLON {
                 if(sym_tab->_insert(*$2))
                 {
                     SymbolInfo* ret_symbol = sym_tab->_search($2->lexeme);
-                    ret_symbol->isFuncDecl = true; // mark as function declaration
+                    ret_symbol->isFuncDecl = true;
                 }
                 else
                 {
                     SymbolInfo* ret_symbol = sym_tab->_search($2->lexeme);
-                    error_multiple_declaration($2->lexeme, ret_symbol->isFuncParam);
+                    mult_declaration_error($2->lexeme, ret_symbol->isFuncParam);
                 }
 
-                function_params.clear();
+                temp_param_list.clear();
             }
 		;
 
 		 
-func_definition: type_specifier ID LPAREN parameter_list RPAREN { is_function_now = true;insert_function_to_global($2,$1->token); } compound_statement { 
-                print_grammar_rule("func_definition","type_specifier ID LPAREN parameter_list RPAREN compound_statement");
-                tnode *a = CreateTnode();
+func_definition: type_specifier ID LPAREN parameter_list RPAREN { curr_ID_func = true;insert_to_symtable($2,$1->token); } compound_statement { 
+                print_rule("func_definition","type_specifier ID LPAREN parameter_list RPAREN compound_statement");
+                ptnode *a = getNewNode();
                 strcpy(a->token,"func_definition");
-                a=ProgramNode($1,a);
-                a=ProgramNode($2,a);
-                a=ProgramNode("LPAREN",a);
-                a=ProgramNode($4,a);
-                a=ProgramNode("RPAREN",a);
-                a=ProgramNode($7,a);
+                a=makeChildNode($1,a);
+                a=makeChildNode($2,a);
+                a=makeChildNode("LPAREN",a);
+                a=makeChildNode($4,a);
+                a=makeChildNode("RPAREN",a);
+                a=makeChildNode($7,a);
                 $$ = a;
 
-                // clear temp function params
-                is_function_now = false;
-                function_params.clear();
+
+                curr_ID_func = false;
+                temp_param_list.clear();
             }
-        | type_specifier ID LPAREN parameter_list error RPAREN { is_function_now = true;insert_function_to_global($2,$1->token); } compound_statement { 
-                
-                /**
-                    To handle cases like :
-                        void foo(int x-y){}
-                **/
-                
-                print_grammar_rule("func_definition","type_specifier ID LPAREN parameter_list RPAREN compound_statement");
+        | type_specifier ID LPAREN parameter_list error RPAREN { curr_ID_func = true;insert_to_symtable($2,$1->token); } compound_statement { 
+                print_rule("func_definition","type_specifier ID LPAREN parameter_list RPAREN compound_statement");
 
-                tnode *a = CreateTnode();
+                ptnode *a = getNewNode();
                 strcpy(a->token,"func_definition");
-                a=ProgramNode($1,a);
-                a=ProgramNode($2,a);
-                a=ProgramNode("LPAREN",a);
-                a=ProgramNode($4,a);
-                a=ProgramNode("RPAREN",a);
-                a=ProgramNode($8,a);
+                a=makeChildNode($1,a);
+                a=makeChildNode($2,a);
+                a=makeChildNode("LPAREN",a);
+                a=makeChildNode($4,a);
+                a=makeChildNode("RPAREN",a);
+                a=makeChildNode($8,a);
                 $$ = a;
 
-                // clear temp function params
-                is_function_now = false;
-                function_params.clear();
+
+                curr_ID_func = false;
+                temp_param_list.clear();
         }
-		|   type_specifier ID LPAREN RPAREN {is_function_now = true;insert_function_to_global($2,$1->token);} compound_statement { 
-                print_grammar_rule("func_definition","type_specifier ID LPAREN RPAREN compound_statement");
+		|   type_specifier ID LPAREN RPAREN {curr_ID_func = true;insert_to_symtable($2,$1->token);} compound_statement { 
+                print_rule("func_definition","type_specifier ID LPAREN RPAREN compound_statement");
 
-                tnode *a = CreateTnode();
+                ptnode *a = getNewNode();
                 strcpy(a->token,"func_definition");
-                a=ProgramNode($1,a);
-                a=ProgramNode($2,a);
-                a=ProgramNode("LPAREN",a);
-                a=ProgramNode("RPAREN",a);
-                a=ProgramNode($6,a);
+                a=makeChildNode($1,a);
+                a=makeChildNode($2,a);
+                a=makeChildNode("LPAREN",a);
+                a=makeChildNode("RPAREN",a);
+                a=makeChildNode($6,a);
                 $$ = a;
 
-                // clear temp function params
-                is_function_now = false;
-                function_params.clear();
+
+                curr_ID_func = false;
+                temp_param_list.clear();
             }
-        |  type_specifier ID LPAREN error RPAREN { is_function_now = true;insert_function_to_global($2,$1->token); } compound_statement {
-                
-                /**
-                    To handle cases like :
-                        void foo(-){}
-                **/
+        |  type_specifier ID LPAREN error RPAREN { curr_ID_func = true;insert_to_symtable($2,$1->token); } compound_statement {
+                print_rule("func_definition","type_specifier ID LPAREN error RPAREN compound_statement");
 
-                print_grammar_rule("func_definition","type_specifier ID LPAREN error RPAREN compound_statement");
-
-                tnode *a = CreateTnode();
+                ptnode *a = getNewNode();
                 strcpy(a->token,"func_definition");
-                a=ProgramNode($1,a);
-                a=ProgramNode($2,a);
-                a=ProgramNode("LPAREN",a);
-                a=ProgramNode("RPAREN",a);
-                a=ProgramNode($7,a);
+                a=makeChildNode($1,a);
+                a=makeChildNode($2,a);
+                a=makeChildNode("LPAREN",a);
+                a=makeChildNode("RPAREN",a);
+                a=makeChildNode($7,a);
                 $$ = a;
-                
-                // clear temp function params
-                is_function_now = false;
-                function_params.clear();
+
+                curr_ID_func = false;
+                temp_param_list.clear();
 
                 yyclearin;
                 yyerrok;
@@ -739,175 +692,163 @@ func_definition: type_specifier ID LPAREN parameter_list RPAREN { is_function_no
 
 
 parameter_list: parameter_list COMMA type_specifier ID {
-                print_grammar_rule("parameter_list","parameter_list COMMA type_specifier ID");
+                print_rule("parameter_list","parameter_list COMMA type_specifier ID");
 
-                tnode *a = CreateTnode();
+                ptnode *a = getNewNode();
                 strcpy(a->token,"parameter_list");
-                a=ProgramNode($1,a);
-                a=ProgramNode("COMMA",a);
-                a=ProgramNode($3,a);
-                a=ProgramNode($4,a);
+                a=makeChildNode($1,a);
+                a=makeChildNode("COMMA",a);
+                a=makeChildNode($3,a);
+                a=makeChildNode($4,a);
                 $$ = a;
 
-                // insert parameter ID to SymbolTable with data_type
-                $4->setDataType($3->valname);
+
+                $4->setDataType($3->value);
                 $4->token = $3->token;
                 $4->isFuncParam = true;
-                function_params.push_back(*$4);
+                temp_param_list.push_back(*$4);
             }
         | parameter_list error COMMA type_specifier ID {
+            print_rule("parameter_list","parameter_list COMMA type_specifier ID");
+        
+            ptnode *a = getNewNode();
+            strcpy(a->token,"parameter_list");
+            a=makeChildNode($1,a);
+            a=makeChildNode("COMMA",a);
+            a=makeChildNode($4,a);
+            a=makeChildNode($5,a);
+            $$ = a;
 
-                /**
-                    To handle errors like:
-                    void foo(int x-y,int z){}
-                **/
 
-               print_grammar_rule("parameter_list","parameter_list COMMA type_specifier ID");
-            
-                tnode *a = CreateTnode();
-                strcpy(a->token,"parameter_list");
-                a=ProgramNode($1,a);
-                a=ProgramNode("COMMA",a);
-                a=ProgramNode($4,a);
-                a=ProgramNode($5,a);
-                $$ = a;
-
-                // insert parameter ID to SymbolTable with data_type
-                $5->setDataType($4->valname);
-                $5->token = $4->token;
-                $5->isFuncParam = true;
-                function_params.push_back(*$5);
+            $5->setDataType($4->value);
+            $5->token = $4->token;
+            $5->isFuncParam = true;
+            temp_param_list.push_back(*$5);
         }
         | parameter_list COMMA type_specifier {
-            print_grammar_rule("parameter_list","parameter_list COMMA type_specifier");
-            tnode *a = CreateTnode();
+            print_rule("parameter_list","parameter_list COMMA type_specifier");
+            ptnode *a = getNewNode();
             strcpy(a->token,"parameter_list");
-            a=ProgramNode($1,a);
-            a=ProgramNode("COMMA",a);
-            a=ProgramNode($3,a);
+            a=makeChildNode($1,a);
+            a=makeChildNode("COMMA",a);
+            a=makeChildNode($3,a);
             $$ = a;
 
-            SymbolInfo temp_s = SymbolInfo("dummy_key","dummy_value");
-            temp_s.data_type = $3->valname;
-            temp_s.isFuncParam = true;
-            function_params.push_back(temp_s);
+            SymbolInfo sym = SymbolInfo("dummy_key","dummy_value");
+            sym.data_type = $3->value;
+            sym.isFuncParam = true;
+            temp_param_list.push_back(sym);
         }
         | parameter_list error COMMA type_specifier {
+            print_rule("parameter_list","parameter_list COMMA type_specifier");
 
-            /**
-                To handle cases like:
-                    void foo(int x-y,int);
-            **/
-
-             print_grammar_rule("parameter_list","parameter_list COMMA type_specifier");
-
-            tnode *a = CreateTnode();
+            ptnode *a = getNewNode();
             strcpy(a->token,"parameter_list");
-            a=ProgramNode($1,a);
-            a=ProgramNode("COMMA",a);
-            a=ProgramNode($4,a);
+            a=makeChildNode($1,a);
+            a=makeChildNode("COMMA",a);
+            a=makeChildNode($4,a);
             $$ = a;
 
-            SymbolInfo temp_s = SymbolInfo("dummy_key","dummy_value");
-            temp_s.data_type = $4->valname;
-            temp_s.isFuncParam = true;
-            function_params.push_back(temp_s);
+            SymbolInfo sym = SymbolInfo("dummy_key","dummy_value");
+            sym.data_type = $4->value;
+            sym.isFuncParam = true;
+            temp_param_list.push_back(sym);
         }
  		| type_specifier ID  { 
-                print_grammar_rule("parameter_list","type_specifier ID");
-                tnode *a = CreateTnode();
+                print_rule("parameter_list","type_specifier ID");
+                ptnode *a = getNewNode();
                 strcpy(a->token,"parameter_list");
-                a=ProgramNode($1,a);
-                a=ProgramNode($2,a);
+                a=makeChildNode($1,a);
+                a=makeChildNode($2,a);
                 $$ = a;
 
-                // insert parameter ID to Parameter SymbolTable with data_type
-                $2->setDataType($1->valname);
+
+                $2->setDataType($1->value);
                 $2->token = $1->token;
                 $2->isFuncParam = true;
-                function_params.push_back(*$2);
+                temp_param_list.push_back(*$2);
         }
 		| type_specifier {
-            print_grammar_rule("parameter_list","type_specifier");
-            tnode *a = CreateTnode();
+            print_rule("parameter_list","type_specifier");
+            ptnode *a = getNewNode();
             strcpy(a->token,"parameter_list");
-            a=ProgramNode($1,a);
+            a=makeChildNode($1,a);
             $$ = a;
 
-            SymbolInfo temp_s = SymbolInfo("dummy_key","dummy_value");
-            temp_s.data_type = $1->valname;
-            temp_s.isFuncParam = true;
-            function_params.push_back(temp_s);
+            SymbolInfo sym = SymbolInfo("dummy_key","dummy_value");
+            sym.data_type = $1->value;
+            sym.isFuncParam = true;
+            temp_param_list.push_back(sym);
         }
  		;
  		
 compound_statement: LCURL dummy_scope_function statements RCURL {
-                print_grammar_rule("compound_statement","LCURL statements RCURL");
+                print_rule("compound_statement","LCURL statements RCURL");
 
-                tnode *a = CreateTnode();
+                ptnode *a = getNewNode();
                 strcpy(a->token,"compound_statement");
-                a=ProgramNode("LCURL", a);
-                a=ProgramNode($3, a);
-                a=ProgramNode("RCURL", a);
+                a=makeChildNode("LCURL", a);
+                a=makeChildNode($3, a);
+                a=makeChildNode("RCURL", a);
                 $$ = a;
 
-                // EXIT
+
                 sym_tab->_print(logout,'A');
                 sym_tab->exitScope();
             }
             | LCURL dummy_scope_function RCURL {
 
-                print_grammar_rule("compound_statement","LCURL RCURL");
+                print_rule("compound_statement","LCURL RCURL");
 
-                tnode *a = CreateTnode();
+                ptnode *a = getNewNode();
                 strcpy(a->token,"compound_statement");
-                a=ProgramNode("LCURL", a);
-                a=ProgramNode("RCURL", a);
+                a=makeChildNode("LCURL", a);
+                a=makeChildNode("RCURL", a);
                 $$ = a;
 
-                // EXIT
+
                 sym_tab->_print(logout,'A');
                 sym_tab->exitScope();
              }
             | LCURL dummy_scope_function statements error RCURL {
-                print_grammar_rule("compound_statement","LCURL statements RCURL");
+                print_rule("compound_statement","LCURL statements RCURL");
 
-                tnode *a = CreateTnode();
+                ptnode *a = getNewNode();
                 strcpy(a->token,"compound_statement");
-                a=ProgramNode("LCURL", a);
-                a=ProgramNode($3, a);
-                a=ProgramNode("RCURL", a);
+                a=makeChildNode("LCURL", a);
+                a=makeChildNode($3, a);
+                a=makeChildNode("RCURL", a);
                 $$ = a;
 
-                 // EXIT
+ 
                 sym_tab->_print(logout,'A');
                 sym_tab->exitScope();
             }
             | LCURL dummy_scope_function error statements RCURL {
-                print_grammar_rule("compound_statement","LCURL statements RCURL");
+                print_rule("compound_statement","LCURL statements RCURL");
 
-                tnode *a = CreateTnode();
+                ptnode *a = getNewNode();
                 strcpy(a->token,"compound_statement");
-                a=ProgramNode("LCURL", a);
-                a=ProgramNode($4, a);
-                a=ProgramNode("RCURL", a);
+                a=makeChildNode("LCURL", a);
+                a=makeChildNode($4, a);
+                a=makeChildNode("RCURL", a);
                 $$ = a;
 
-                // EXIT
+
                 sym_tab->_print(logout,'A');
                 sym_tab->exitScope();
             }
              | LCURL dummy_scope_function error RCURL {
                 
-                print_grammar_rule("compound_statement","LCURL error RCURL");
+                print_rule("compound_statement","LCURL error RCURL");
 
-                tnode *a = CreateTnode();
+                ptnode *a = getNewNode();
                 strcpy(a->token,"compound_statement");
-                a=ProgramNode("LCURL", a);
-                a=ProgramNode("RCURL", a);
+                a=makeChildNode("LCURL", a);
+                a=makeChildNode("RCURL", a);
                 $$ = a;
 
-                // EXIT
+
                 sym_tab->_print(logout,'A');
                 sym_tab->exitScope();
              }
@@ -916,16 +857,15 @@ dummy_scope_function:  {
 
                     sym_tab->enterScope(); 
 
-                    if(is_function_now)
+                    if(curr_ID_func)
                     {
-                        for(auto el:function_params)
+                        for(auto el:temp_param_list)
                         {
 
                             if(el.lexeme == "dummy_key") continue;
-                            // insert ID
-                            if(!sym_tab->_insert(el)) // already present in current scope
+                            if(!sym_tab->_insert(el))
                             {
-                                error_multiple_declaration(el.lexeme,el.isFuncParam);
+                                mult_declaration_error(el.lexeme,el.isFuncParam);
                             }
                         }
                     }
@@ -934,63 +874,54 @@ dummy_scope_function:  {
  		    
 var_declaration: type_specifier declaration_list SEMICOLON { 
 
-            print_grammar_rule("var_declaration","type_specifier declaration_list SEMICOLON");
-            tnode *a = CreateTnode();
+            print_rule("var_declaration","type_specifier declaration_list SEMICOLON");
+            ptnode *a = getNewNode();
             strcpy(a->token,"var_declaration");
-            a=ProgramNode($1,a);
-            a=ProgramNode($2,a);
-            a=ProgramNode("SEMICOLON",a);
+            a=makeChildNode($1,a);
+            a=makeChildNode($2,a);
+            a=makeChildNode("SEMICOLON",a);
             $$ = a;
 
-            if(!strcmp($1->valname,"void")){
-                fprintf(errout, "Line# %d: Variable or field \'%s\' declared void\n", line_count, (($2->v[0])->lexeme).data());
+            if(!strcmp($1->value,"void")){
+                fprintf(errout, "Line# %d: Variable or field \'%s\' declared void\n", line_count, (($2->args_info_list[0])->lexeme).data());
                 err_count++;
             }
             else{
-                for(auto el:$2->v)
+                for(auto el:$2->args_info_list)
                 {
-                    if(el->data_type == "array") { el->setDataType(strcat($1->valname, "_array")) ; el->token = "ARRAY";}
-                    else { el->setDataType($1->valname); el->token = $1->token; }
+                    if(el->data_type == "array") { el->setDataType(strcat($1->value, "_array")) ; el->token = "ARRAY";}
+                    else { el->setDataType($1->value); el->token = $1->token; }
                     
                     if(el->token == "INT")  el->setDataType("int");
                     else if(el->token == "FLOAT")  el->setDataType("float");
 
-                    if(!sym_tab->_insert(*el)) // already present in current scope
+                    if(!sym_tab->_insert(*el))
                     {
-                        if(!strcmp(el->data_type.c_str(),$1->valname)) error_multiple_declaration(el->lexeme, el->isFuncParam);
-                        else error_type_mismatch(el->lexeme);
+                        if(!strcmp(el->data_type.c_str(),$1->value)) mult_declaration_error(el->lexeme, el->isFuncParam);
+                        else type_conflict_error(el->lexeme);
                     }
                 }
             }
         }
-        | type_specifier declaration_list error SEMICOLON { 
+        | type_specifier declaration_list error SEMICOLON {       
+            print_rule("var_declaration","type_specifier declaration_list SEMICOLON");
 
-            /**
-                To handle errors like :
-                    int x-y;
-                    int x[10]-y;
-                    int x[10.5]-y;
-            **/            
-
-            print_grammar_rule("var_declaration","type_specifier declaration_list SEMICOLON");
-
-            tnode *a = CreateTnode();
+            ptnode *a = getNewNode();
             strcpy(a->token,"var_declaration");
-            a=ProgramNode($1,a);
-            a=ProgramNode($2,a);
-            a=ProgramNode("SEMICOLON",a);
+            a=makeChildNode($1,a);
+            a=makeChildNode($2,a);
+            a=makeChildNode("SEMICOLON",a);
             $$ = a;
             
-            // insert all declaration_list ID to SymbolTable with data_type
-            for(auto el:$2->v)
+            for(auto el:$2->args_info_list)
             {
-                if(el->data_type == "array") {el->setDataType(strcat($1->valname,"_array")) ; el->token = "ARRAY";}
-                else {el->setDataType($1->valname); el->token = $1->valname;}
+                if(el->data_type == "array") {el->setDataType(strcat($1->value,"_array")) ; el->token = "ARRAY";}
+                else {el->setDataType($1->value); el->token = $1->value;}
                 
-                if(!sym_tab->_insert(*el)) // already present in current scope
+                if(!sym_tab->_insert(*el))
                 {
-                    if(!strcmp(el->data_type.c_str(),$1->valname)) error_multiple_declaration(el->lexeme, el->isFuncParam);
-                    else error_type_mismatch(el->lexeme);
+                    if(!strcmp(el->data_type.c_str(),$1->value)) mult_declaration_error(el->lexeme, el->isFuncParam);
+                    else type_conflict_error(el->lexeme);
                 }
 
             }
@@ -998,234 +929,203 @@ var_declaration: type_specifier declaration_list SEMICOLON {
  		;
  		 
 type_specifier: INT  { 
-                    print_grammar_rule("type_specifier","INT"); 
+                    print_rule("type_specifier","INT"); 
 
-                    tnode *a = CreateTnode();
+                    ptnode *a = getNewNode();
                     strcpy(a->token,"type_specifier");
-                    a=ProgramNode($1,a);
+                    a=makeChildNode($1,a);
                     $$ = a;
-                    strcpy($$->valname,"int");
+                    strcpy($$->value,"int");
                     strcpy($$->token,"INT");
                 }
  		| FLOAT { 
-                    print_grammar_rule("type_specifier","FLOAT"); 
+                    print_rule("type_specifier","FLOAT"); 
 
-                    tnode *a = CreateTnode();
+                    ptnode *a = getNewNode();
                     strcpy(a->token,"type_specifier");
-                    a=ProgramNode($1,a);
+                    a=makeChildNode($1,a);
                     $$ = a;
-                    strcpy($$->valname,"float");
+                    strcpy($$->value,"float");
                     strcpy($$->token,"FLOAT");
                 }
  		| VOID { 
-                    print_grammar_rule("type_specifier","VOID"); 
-                    tnode *a = CreateTnode();
+                    print_rule("type_specifier","VOID"); 
+                    ptnode *a = getNewNode();
                     strcpy(a->token,"type_specifier");
-                    a=ProgramNode($1,a);
+                    a=makeChildNode($1,a);
                     $$ = a;
-                    strcpy($$->valname,"void");
+                    strcpy($$->value,"void");
                     strcpy($$->token,"VOID");
                 }
  		;
  		
 declaration_list: declaration_list COMMA ID { 
-                    print_grammar_rule("declaration_list","declaration_list COMMA ID");
+                    print_rule("declaration_list","declaration_list COMMA ID");
                     
-                    tnode *a = CreateTnode();
+                    ptnode *a = getNewNode();
                     strcpy(a->token,"declaration_list");
-                    a=ProgramNode($1,a);
-                    a=ProgramNode("COMMA",a);
-                    a=ProgramNode($3,a);
+                    a=makeChildNode($1,a);
+                    a=makeChildNode("COMMA",a);
+                    a=makeChildNode($3,a);
                     $$ = a;
 
-                    // update type
-                    strcpy($$->HelperType, $1->HelperType);
+                    
+                    strcpy($$->resultType, $1->resultType);
 
-                    // init update vector
-                    $$->v = $1->v;
-                    $$->v.push_back($3);
+                    
+                    $$->args_info_list= $1->args_info_list;
+                    $$->args_info_list.push_back($3);
             }
             | declaration_list error COMMA ID {
+                print_rule("declaration_list","declaration_list COMMA ID");
 
-                /**
-                To handle errors like :
-                    int x-y,z;
-                **/    
-
-                print_grammar_rule("declaration_list","declaration_list COMMA ID");
-
-                tnode *a = CreateTnode();
+                ptnode *a = getNewNode();
                 strcpy(a->token,"declaration_list");
-                a=ProgramNode($1,a);
-                a=ProgramNode("COMMA",a);
-                a=ProgramNode($4,a);
+                a=makeChildNode($1,a);
+                a=makeChildNode("COMMA",a);
+                a=makeChildNode($4,a);
                 $$ = a;
 
-                // update type
-                strcpy($$->HelperType, $1->HelperType);
+                
+                strcpy($$->resultType, $1->resultType);
 
-                // init update vector
-                $$->v = $1->v;
-                $$->v.push_back($4);
+                
+                $$->args_info_list= $1->args_info_list;
+                $$->args_info_list.push_back($4);
                 fprintf(errout, "Line# %d: Syntax error at declaration list of variable declaration\n", line_count);
                 err_count++;
             }
  		    | declaration_list COMMA ID LTHIRD CONST_INT RTHIRD {
-                print_grammar_rule("declaration_list","declaration_list COMMA ID LTHIRD CONST_INT RTHIRD");
+                print_rule("declaration_list","declaration_list COMMA ID LTHIRD CONST_INT RTHIRD");
 
-                tnode *a = CreateTnode();
+                ptnode *a = getNewNode();
                 strcpy(a->token,"declaration_list");
-                a=ProgramNode($1,a);
-                a=ProgramNode("COMMA",a);
-                a=ProgramNode($3,a);
-                a=ProgramNode("LTHIRD",a);
-                a=ProgramNode($5,a);
-                a=ProgramNode("RTHIRD",a);
+                a=makeChildNode($1,a);
+                a=makeChildNode("COMMA",a);
+                a=makeChildNode($3,a);
+                a=makeChildNode("LTHIRD",a);
+                a=makeChildNode($5,a);
+                a=makeChildNode("RTHIRD",a);
                 $$ = a;
 
-                // update type
-                strcpy($$->HelperType, $1->HelperType);
+                
+                strcpy($$->resultType, $1->resultType);
 
-                // init & update vector
-                $$->v = $1->v;
+                
+                $$->args_info_list= $1->args_info_list;
                 $3->token ="ARRAY";
                 $3->data_type ="array";
-                $$->v.push_back($3);
+                $$->args_info_list.push_back($3);
            }
            | declaration_list error COMMA ID LTHIRD CONST_INT RTHIRD {
+                print_rule("declaration_list","declaration_list COMMA ID LTHIRD CONST_INT RTHIRD");
 
-                /**
-                    To handle errors like :
-                        int x-y,z[10];
-                    **/  
-
-                print_grammar_rule("declaration_list","declaration_list COMMA ID LTHIRD CONST_INT RTHIRD");
-
-                tnode *a = CreateTnode();
+                ptnode *a = getNewNode();
                 strcpy(a->token,"declaration_list");
-                a=ProgramNode($1,a);
-                a=ProgramNode("COMMA",a);
-                a=ProgramNode($4,a);
-                a=ProgramNode("LTHIRD",a);
-                a=ProgramNode($6,a);
-                a=ProgramNode("RTHIRD",a);
+                a=makeChildNode($1,a);
+                a=makeChildNode("COMMA",a);
+                a=makeChildNode($4,a);
+                a=makeChildNode("LTHIRD",a);
+                a=makeChildNode($6,a);
+                a=makeChildNode("RTHIRD",a);
                 $$ = a;
 
-                // update type
-                strcpy($$->HelperType, $1->HelperType);
+                
+                strcpy($$->resultType, $1->resultType);
 
-                // init & update vector
-                $$->v = $1->v;
+                
+                $$->args_info_list= $1->args_info_list;
                 $4->token ="ARRAY";
                 $4->data_type ="array";
-                $$->v.push_back($4);
+                $$->args_info_list.push_back($4);
            }
            | declaration_list COMMA ID LTHIRD CONST_FLOAT RTHIRD {
+                print_rule("declaration_list","declaration_list COMMA ID LTHIRD CONST_FLOAT RTHIRD");
 
-                /***
-                    THIS IS AS EXTRA RULE ADDED TO CATCH ERROR
-                ***/
-
-                print_grammar_rule("declaration_list","declaration_list COMMA ID LTHIRD CONST_FLOAT RTHIRD");
-
-                tnode *a = CreateTnode();
+                ptnode *a = getNewNode();
                 strcpy(a->token,"declaration_list");
-                a=ProgramNode($1,a);
-                a=ProgramNode("COMMA",a);
-                a=ProgramNode($3,a);
-                a=ProgramNode("LTHIRD",a);
-                a=ProgramNode($5,a);
-                a=ProgramNode("RTHIRD",a);
+                a=makeChildNode($1,a);
+                a=makeChildNode("COMMA",a);
+                a=makeChildNode($3,a);
+                a=makeChildNode("LTHIRD",a);
+                a=makeChildNode($5,a);
+                a=makeChildNode("RTHIRD",a);
                 $$ = a;
 
-                // update type
-                strcpy($$->HelperType, $1->HelperType);
+                
+                strcpy($$->resultType, $1->resultType);
 
-                // int & update vector
-                $$->v = $1->v;
-                $$->v.push_back($3);
+                
+                $$->args_info_list= $1->args_info_list;
+                $$->args_info_list.push_back($3);
 
                 fprintf(errout, "Line# %d: Non-integer Array Size\n", line_count);
                 err_count++;
             }
             | declaration_list error COMMA ID LTHIRD CONST_FLOAT RTHIRD {
+                print_rule("declaration_list","declaration_list COMMA ID LTHIRD CONST_FLOAT RTHIRD");
 
-                    /***
-                        THIS IS AS EXTRA RULE ADDED TO CATCH ERROR
-                        
-                        Also,
-                        To handle errors like :
-                        int x-y,z[10.5];
-                    ***/
-
-                print_grammar_rule("declaration_list","declaration_list COMMA ID LTHIRD CONST_FLOAT RTHIRD");
-
-                tnode *a = CreateTnode();
+                ptnode *a = getNewNode();
                 strcpy(a->token,"declaration_list");
-                a=ProgramNode($1,a);
-                a=ProgramNode("COMMA",a);
-                a=ProgramNode($4,a);
-                a=ProgramNode("LTHIRD",a);
-                a=ProgramNode($6,a);
-                a=ProgramNode("RTHIRD",a);
+                a=makeChildNode($1,a);
+                a=makeChildNode("COMMA",a);
+                a=makeChildNode($4,a);
+                a=makeChildNode("LTHIRD",a);
+                a=makeChildNode($6,a);
+                a=makeChildNode("RTHIRD",a);
                 $$ = a;
 
-                // update type
-                strcpy($$->HelperType, $1->HelperType);
+                
+                strcpy($$->resultType, $1->resultType);
 
-                // int & update vector
-                $$->v = $1->v;
-                $$->v.push_back($4);
+                
+                $$->args_info_list= $1->args_info_list;
+                $$->args_info_list.push_back($4);
 
                 fprintf(errout, "Line# %d: Non-integer Array Size\n", line_count);
                 err_count++;
             }
  		    | ID {     
-                    print_grammar_rule("declaration_list","ID");
+                    print_rule("declaration_list","ID");
 
-                    tnode *a = CreateTnode();
+                    ptnode *a = getNewNode();
                     strcpy(a->token,"declaration_list");
-                    a=ProgramNode($1,a);
+                    a=makeChildNode($1,a);
                     $$ = a;
 
-                    // init vector
-                    $$->v.push_back($1);
+                    
+                    $$->args_info_list.push_back($1);
             }
  		    | ID LTHIRD CONST_INT RTHIRD {
 
-                    print_grammar_rule("declaration_list","ID LTHIRD CONST_INT RTHIRD");
+                    print_rule("declaration_list","ID LTHIRD CONST_INT RTHIRD");
 
-                    tnode *a = CreateTnode();
+                    ptnode *a = getNewNode();
                     strcpy(a->token,"declaration_list");
-                    a=ProgramNode($1,a);
-                    a=ProgramNode("LTHIRD",a);
-                    a=ProgramNode($3,a);
-                    a=ProgramNode("RTHIRD",a);
+                    a=makeChildNode($1,a);
+                    a=makeChildNode("LTHIRD",a);
+                    a=makeChildNode($3,a);
+                    a=makeChildNode("RTHIRD",a);
                     $$ = a;
 
-                    // init vector
+                    
                     $1->token = "ARRAY";
                     $1->data_type ="array";
-                    $$->v.push_back($1);
+                    $$->args_info_list.push_back($1);
             }
             | ID LTHIRD CONST_FLOAT RTHIRD {
+                    print_rule("declaration_list","ID LTHIRD CONST_FLOAT RTHIRD");
 
-                    /***
-                        THIS IS AS EXTRA RULE ADDED TO CATCH ERROR
-                    ***/
-
-                    print_grammar_rule("declaration_list","ID LTHIRD CONST_FLOAT RTHIRD");
-
-                    tnode *a = CreateTnode();
+                    ptnode *a = getNewNode();
                     strcpy(a->token,"declaration_list");
-                    a=ProgramNode($1,a);
-                    a=ProgramNode("LTHIRD",a);
-                    a=ProgramNode($3,a);
-                    a=ProgramNode("RTHIRD",a);
+                    a=makeChildNode($1,a);
+                    a=makeChildNode("LTHIRD",a);
+                    a=makeChildNode($3,a);
+                    a=makeChildNode("RTHIRD",a);
                     $$ = a;
 
-                    // init vector
-                    $$->v.push_back($1);
+                    
+                    $$->args_info_list.push_back($1);
 
                     fprintf(errout, "Line# %d: Non-integer Array Size\n", line_count);
                     err_count++;
@@ -1233,222 +1133,222 @@ declaration_list: declaration_list COMMA ID {
  		  ;
  		  
 statements: statement {
-            print_grammar_rule("statements","statement");
-            tnode *a = CreateTnode();
+            print_rule("statements","statement");
+            ptnode *a = getNewNode();
             strcpy(a->token,"statements");
-            a=ProgramNode($1,a);
+            a=makeChildNode($1,a);
             $$ = a;
             
         }
 	   | statements statement {
-            print_grammar_rule("statements","statements statement");
+            print_rule("statements","statements statement");
         
-            tnode *a = CreateTnode();
+            ptnode *a = getNewNode();
             strcpy(a->token,"statements");
-            a=ProgramNode($1,a);
-            a=ProgramNode($2,a);
+            a=makeChildNode($1,a);
+            a=makeChildNode($2,a);
             $$ = a;
         }
         | statements error statement {
-            print_grammar_rule("statements","statements statement");
+            print_rule("statements","statements statement");
         
-            tnode *a = CreateTnode();
+            ptnode *a = getNewNode();
             strcpy(a->token,"statements");
-            a=ProgramNode($1,a);
-            a=ProgramNode($3,a);
+            a=makeChildNode($1,a);
+            a=makeChildNode($3,a);
             $$ = a;
         }
         
 	   ;
 	   
 statement: var_declaration {
-            print_grammar_rule("statement","var_declaration");
+            print_rule("statement","var_declaration");
 
-            tnode *a = CreateTnode();
+            ptnode *a = getNewNode();
             strcpy(a->token,"statement");
-            a=ProgramNode($1,a);
+            a=makeChildNode($1,a);
             $$ = a;
         }
       | func_definition {
-            print_grammar_rule("statement","func_definition");
+            print_rule("statement","func_definition");
 
-            tnode *a = CreateTnode();
+            ptnode *a = getNewNode();
             strcpy(a->token,"statement");
-            a=ProgramNode($1,a);
+            a=makeChildNode($1,a);
             $$ = a;
 
             fprintf(errout, "Line# %d: A function cannot be defined inside another function\n", line_count);
             err_count++;
       }
       | func_declaration {
-            print_grammar_rule("statement","func_declaration");
-            tnode *a = CreateTnode();
+            print_rule("statement","func_declaration");
+            ptnode *a = getNewNode();
             strcpy(a->token,"statement");
-            a=ProgramNode($1,a);
+            a=makeChildNode($1,a);
             $$ = a;
 
             fprintf(errout, "Line# %d: A function cannot be defined inside another function\n", line_count);
             err_count++;
       }
 	  | expression_statement {
-            print_grammar_rule("statement","expression_statement");
-            tnode *a = CreateTnode();
+            print_rule("statement","expression_statement");
+            ptnode *a = getNewNode();
             strcpy(a->token,"statement");
-            a=ProgramNode($1,a);
+            a=makeChildNode($1,a);
             $$ = a;
         }
 	  | compound_statement {
-            print_grammar_rule("statement","compound_statement");
-            tnode *a = CreateTnode();
+            print_rule("statement","compound_statement");
+            ptnode *a = getNewNode();
             strcpy(a->token,"statement");
-            a=ProgramNode($1,a);
+            a=makeChildNode($1,a);
             $$ = a;
         }
 	  | FOR LPAREN expression_statement expression_statement expression RPAREN statement {
-            print_grammar_rule("statement","FOR LPAREN expression_statement expression_statement expression RPAREN statement");
-            tnode *a = CreateTnode();
+            print_rule("statement","FOR LPAREN expression_statement expression_statement expression RPAREN statement");
+            ptnode *a = getNewNode();
             strcpy(a->token,"statement");
-            a=ProgramNode($1, "FOR", a);
-            a=ProgramNode("LPAREN", a);
-            a=ProgramNode($3, a);
-            a=ProgramNode($4, a);
-            a=ProgramNode($5, a);
-            a=ProgramNode("RPAREN", a);
-            a=ProgramNode($7, a);
+            a=makeChildNode($1, "FOR", a);
+            a=makeChildNode("LPAREN", a);
+            a=makeChildNode($3, a);
+            a=makeChildNode($4, a);
+            a=makeChildNode($5, a);
+            a=makeChildNode("RPAREN", a);
+            a=makeChildNode($7, a);
             $$ = a;
         }
 	  | IF LPAREN expression RPAREN statement %prec LOWER_THAN_ELSE { 
-            print_grammar_rule("statement","IF LPAREN expression RPAREN statement");
-            tnode *a = CreateTnode();
+            print_rule("statement","IF LPAREN expression RPAREN statement");
+            ptnode *a = getNewNode();
             strcpy(a->token,"statement");
-            a=ProgramNode($1, "IF",a);
-            a=ProgramNode("LPAREN",a);
-            a=ProgramNode($3,a);
-            a=ProgramNode("RPAREN",a);
-            a=ProgramNode($5,a);
+            a=makeChildNode($1, "IF",a);
+            a=makeChildNode("LPAREN",a);
+            a=makeChildNode($3,a);
+            a=makeChildNode("RPAREN",a);
+            a=makeChildNode($5,a);
             $$ = a;
         }
 	  | IF LPAREN expression RPAREN statement ELSE statement {
 
-            print_grammar_rule("statement","IF LPAREN expression RPAREN statement ELSE statement");
-            tnode *a = CreateTnode();
+            print_rule("statement","IF LPAREN expression RPAREN statement ELSE statement");
+            ptnode *a = getNewNode();
             strcpy(a->token,"statement");
-            a=ProgramNode($1, "IF",a);
-            a=ProgramNode("LPAREN",a);
-            a=ProgramNode($3,a);
-            a=ProgramNode("RPAREN",a);
-            a=ProgramNode($1, "ELSE",a);
-            a=ProgramNode($5,a);
+            a=makeChildNode($1, "IF",a);
+            a=makeChildNode("LPAREN",a);
+            a=makeChildNode($3,a);
+            a=makeChildNode("RPAREN",a);
+            a=makeChildNode($1, "ELSE",a);
+            a=makeChildNode($5,a);
             $$ = a;
         
         }
 	  | WHILE LPAREN expression RPAREN statement {
-            print_grammar_rule("statement","WHILE LPAREN expression RPAREN statement");
-            tnode *a = CreateTnode();
+            print_rule("statement","WHILE LPAREN expression RPAREN statement");
+            ptnode *a = getNewNode();
             strcpy(a->token,"statement");
-            a=ProgramNode($1,"WHILE",a);
+            a=makeChildNode($1,"WHILE",a);
             $$ = a;
         }
 	  | PRINTLN LPAREN ID RPAREN SEMICOLON {
-            print_grammar_rule("statement","PRINTLN LPAREN ID RPAREN SEMICOLON");
+            print_rule("statement","PRINTLN LPAREN ID RPAREN SEMICOLON");
 
-            tnode *a = CreateTnode();
+            ptnode *a = getNewNode();
             strcpy(a->token,"statement");
-            a=ProgramNode($1,"PRINTLN",a);
-            a=ProgramNode("LPAREN",a);
-            a=ProgramNode($3,a);
-            a=ProgramNode("RPAREN",a);
-            a=ProgramNode("SEMICOLON",a);
+            a=makeChildNode($1,"PRINTLN",a);
+            a=makeChildNode("LPAREN",a);
+            a=makeChildNode($3,a);
+            a=makeChildNode("RPAREN",a);
+            a=makeChildNode("SEMICOLON",a);
             $$ = a;
 
-            // check error
+
             SymbolInfo* ret_symbol = sym_tab->_search($3->lexeme);
 
             if(ret_symbol == NULL)
             {
                 fprintf(errout, "Line# %d: Undeclared variable \'%s\'\n", line_count, ($3->lexeme).data());
                 err_count++;
-                strcpy($$->HelperType,"NULL");
+                strcpy($$->resultType,"NULL");
             }
             
         }
 	  | RETURN expression SEMICOLON {
-            print_grammar_rule("statement","RETURN expression SEMICOLON");
-            tnode *a = CreateTnode();
+            print_rule("statement","RETURN expression SEMICOLON");
+            ptnode *a = getNewNode();
             strcpy(a->token,"statement");
-            a=ProgramNode("RETURN",a);
-            a=ProgramNode($2,a);
-            a=ProgramNode("SEMICOLON",a);
+            a=makeChildNode("RETURN",a);
+            a=makeChildNode($2,a);
+            a=makeChildNode("SEMICOLON",a);
             $$ = a;
         }
 	  ;
 	  
 expression_statement: SEMICOLON	{
-                    print_grammar_rule("expression_statement","SEMICOLON");
-                    tnode *a = CreateTnode();
+                    print_rule("expression_statement","SEMICOLON");
+                    ptnode *a = getNewNode();
                     strcpy(a->token,"expression_statement");
-                    a=ProgramNode("SEMICOLON",a);
+                    a=makeChildNode("SEMICOLON",a);
                     $$ = a;
                 }		
 			| expression SEMICOLON {
-                    print_grammar_rule("expression_statement","expression SEMICOLON");
-                    tnode *a = CreateTnode();
+                    print_rule("expression_statement","expression SEMICOLON");
+                    ptnode *a = getNewNode();
                     strcpy(a->token,"expression_statement");
-                    a=ProgramNode($1,a);
-                    a=ProgramNode("SEMICOLON",a);
+                    a=makeChildNode($1,a);
+                    a=makeChildNode("SEMICOLON",a);
                     $$ = a;
                 }
 			;
 	  
 variable: ID { 
-            print_grammar_rule("variable","ID");
+            print_rule("variable","ID");
 
-            tnode *a = CreateTnode();
+            ptnode *a = getNewNode();
             strcpy(a->token,"variable");
-            a=ProgramNode($1,a);
+            a=makeChildNode($1,a);
             $$ = a;
 
-            // check error
+
             SymbolInfo* ret_symbol = sym_tab->_search($1->lexeme);
 
             if(ret_symbol == NULL)
             {
                 fprintf(errout, "Line# %d: Undeclared variable \'%s\'\n", line_count, ($1->lexeme).data());
                 err_count++;
-                strcpy($$->HelperType, "NULL");
+                strcpy($$->resultType, "NULL");
             }
             else
             {
                 if(ret_symbol->data_type == "int_array" || ret_symbol->data_type == "float_array")
                 {
-                    error_type_mismatch(ret_symbol->lexeme);
-                    strcpy($$->HelperType, "NULL");
+                    type_conflict_error(ret_symbol->lexeme);
+                    strcpy($$->resultType, "NULL");
                 }
                 else{
-                    strcpy($$->HelperType, ret_symbol->data_type.c_str());
+                    strcpy($$->resultType, ret_symbol->data_type.c_str());
                 }
             }
 
         }		
 	 | ID LTHIRD expression RTHIRD {
-            print_grammar_rule("variable","ID LTHIRD expression RTHIRD");
+            print_rule("variable","ID LTHIRD expression RTHIRD");
 
-            tnode *a = CreateTnode();
+            ptnode *a = getNewNode();
             strcpy(a->token,"variable");
-            a=ProgramNode($1,a);
-            a=ProgramNode("LTHIRD",a);
-            a=ProgramNode($3,a);
-            a=ProgramNode("RTHIRD",a);
+            a=makeChildNode($1,a);
+            a=makeChildNode("LTHIRD",a);
+            a=makeChildNode($3,a);
+            a=makeChildNode("RTHIRD",a);
             $$ = a;
 
-            // check error
+
             SymbolInfo* ret_symbol = sym_tab->_search($1->lexeme);
 
             if(ret_symbol == NULL)
             {
                 fprintf(errout, "Line# %d: Undeclared variable \'%s\'\n", line_count, ($1->lexeme).data());
                 err_count++;
-                strcpy($$->HelperType, "NULL");
+                strcpy($$->resultType, "NULL");
             }
             else
             {
@@ -1456,14 +1356,14 @@ variable: ID {
                 {
                     fprintf(errout, "Line# %d: \'%s\' is not an array\n", line_count, (ret_symbol->lexeme).data());
                     err_count++;
-                    strcpy($$->HelperType, "NULL");
+                    strcpy($$->resultType, "NULL");
                 }
                 else{
-                    strcpy($$->HelperType, ret_symbol->data_type.c_str());
+                    strcpy($$->resultType, ret_symbol->data_type.c_str());
                 }
             }
 
-            if(strcmp($3->HelperType, "int"))
+            if(strcmp($3->resultType, "int"))
             {
                 fprintf(errout, "Line# %d: Array subscript is not an integer\n", line_count);
                 err_count++;
@@ -1472,33 +1372,33 @@ variable: ID {
 	 ;
 	 
  expression: logic_expression	{
-                print_grammar_rule("expression","logic_expression");
-                tnode *a = CreateTnode();
+                print_rule("expression","logic_expression");
+                ptnode *a = getNewNode();
                 strcpy(a->token,"expression");
-                a=ProgramNode($1,a);
+                a=makeChildNode($1,a);
                 $$ = a;
 
-                // update vector : push up
-                strcpy($$->HelperType, $1->HelperType);
+
+                strcpy($$->resultType, $1->resultType);
             }
 	   | variable ASSIGNOP logic_expression {
-                print_grammar_rule("expression","variable ASSIGNOP logic_expression");
+                print_rule("expression","variable ASSIGNOP logic_expression");
 
-                tnode *a = CreateTnode();
+                ptnode *a = getNewNode();
                 strcpy(a->token,"expression");
-                a=ProgramNode($1,a);
-                a=ProgramNode("ASSIGNOP",a);
-                a=ProgramNode($3,a);
+                a=makeChildNode($1,a);
+                a=makeChildNode("ASSIGNOP",a);
+                a=makeChildNode($3,a);
                 $$ = a;
 
-                if(!check_assignop($1->HelperType,$3->HelperType))
+                if(!is_assignment_valid($1->resultType,$3->resultType))
                 {
-                    if(strcmp($1->HelperType,"void")==0 || strcmp($3->HelperType,"void")==0)
+                    if(strcmp($1->resultType,"void")==0 || strcmp($3->resultType,"void")==0)
                     {
-                        error_type_cast_void();
+                        void_expression_error();
                     }
-                    else if((!strcmp($1->HelperType,"int") || !strcmp($1->HelperType,"int_array")) && 
-                            (!strcmp($3->HelperType,"float") || !strcmp($3->HelperType,"float_array")))
+                    else if((!strcmp($1->resultType,"int") || !strcmp($1->resultType,"int_array")) && 
+                            (!strcmp($3->resultType,"float") || !strcmp($3->resultType,"float_array")))
                     {
                         fprintf(errout, "Line# %d: Warning: possible loss of data in assignment of FLOAT to INT\n", line_count);
                         err_count++;
@@ -1510,177 +1410,177 @@ variable: ID {
 
 			 
 logic_expression: rel_expression {
-                print_grammar_rule("logic_expression","rel_expression"); 
-                tnode *a = CreateTnode();
+                print_rule("logic_expression","rel_expression"); 
+                ptnode *a = getNewNode();
                 strcpy(a->token,"logic_expression");
-                a=ProgramNode($1,a);
+                a=makeChildNode($1,a);
                 $$ = a;
 
-                // update vector : push up
-                strcpy($$->HelperType, $1->HelperType);
+
+                strcpy($$->resultType, $1->resultType);
             }	
 		 | rel_expression LOGICOP rel_expression {
-                print_grammar_rule("logic_expression","rel_expression LOGICOP rel_expression");
+                print_rule("logic_expression","rel_expression LOGICOP rel_expression");
 
-                tnode *a = CreateTnode();
+                ptnode *a = getNewNode();
                 strcpy(a->token,"logic_expression");
-                a=ProgramNode($1,a);
-                a=ProgramNode($2,a);
-                a=ProgramNode($3,a);
+                a=makeChildNode($1,a);
+                a=makeChildNode($2,a);
+                a=makeChildNode($3,a);
                 $$ = a;
 
-                // do implicit typecast
-                string typecast_ret = do_implicit_typecast($1->HelperType,$3->HelperType);
+
+                string typecast_ret = typecast($1->resultType,$3->resultType);
 
                 if(typecast_ret != "NULL")
                 {
-                    if(typecast_ret != "error") strcpy($$->HelperType,"int"); // ALWAYS INT
+                    if(typecast_ret != "error") strcpy($$->resultType,"int");
                     else {
 
-                        if(!strcmp($1->HelperType, "void") || !strcmp($3->HelperType, "void"))
+                        if(!strcmp($1->resultType, "void") || !strcmp($3->resultType, "void"))
                         {
-                            error_type_cast_void();
+                            void_expression_error();
                         }
                         else
                         {
-                            error_type_cast();
+                            typecast_error();
                         }
 
-                        strcpy($$->HelperType, "NULL");
+                        strcpy($$->resultType, "NULL");
                     }
                 }
                 else
                 {
-                    strcpy($$->HelperType, "NULL");
+                    strcpy($$->resultType, "NULL");
                 }
             }	
 		 ;
 			
 rel_expression: simple_expression {
-                print_grammar_rule("rel_expression","simple_expression");
-                tnode *a = CreateTnode();
+                print_rule("rel_expression","simple_expression");
+                ptnode *a = getNewNode();
                 strcpy(a->token,"rel_expression");
-                a=ProgramNode($1,a);
+                a=makeChildNode($1,a);
                 $$ = a;
 
-                // update vector : push up
-                strcpy($$->HelperType, $1->HelperType);
+
+                strcpy($$->resultType, $1->resultType);
             }
 		| simple_expression RELOP simple_expression	{
-                print_grammar_rule("rel_expression","simple_expression RELOP simple_expression");
+                print_rule("rel_expression","simple_expression RELOP simple_expression");
 
-                tnode *a = CreateTnode();
+                ptnode *a = getNewNode();
                 strcpy(a->token,"rel_expression");
-                a=ProgramNode($1,a);
-                a=ProgramNode($2,a);
-                a=ProgramNode($3,a);
+                a=makeChildNode($1,a);
+                a=makeChildNode($2,a);
+                a=makeChildNode($3,a);
                 $$ = a;
 
-                // do implicit typecast
-                string typecast_ret = do_implicit_typecast($1->HelperType,$3->HelperType);
+
+                string typecast_ret = typecast($1->resultType,$3->resultType);
 
                 if(typecast_ret != "NULL")
                 {
-                    if(typecast_ret != "error") strcpy($$->HelperType, "int"); // ALWAYS INT
+                    if(typecast_ret != "error") strcpy($$->resultType, "int");
                     else {
 
-                        if(!strcmp($1->HelperType, "void") || !strcmp($3->HelperType, "void"))
+                        if(!strcmp($1->resultType, "void") || !strcmp($3->resultType, "void"))
                         {
-                            error_type_cast_void();
+                            void_expression_error();
                         }
                         else
                         {
-                            error_type_cast();
+                            typecast_error();
                         }
 
-                        strcpy($$->HelperType, "NULL");
+                        strcpy($$->resultType, "NULL");
                     }
                 }
                 else
                 {
-                    strcpy($$->HelperType, "NULL");
+                    strcpy($$->resultType, "NULL");
                 }
             }
 		;
 				
 simple_expression: term {
 
-                    print_grammar_rule("simple_expression","term");
-                    tnode *a = CreateTnode();
+                    print_rule("simple_expression","term");
+                    ptnode *a = getNewNode();
                     strcpy(a->token,"simple_expression");
-                    a=ProgramNode($1,a);
+                    a=makeChildNode($1,a);
                     $$ = a;
 
-                    // update vector : push up
-                    strcpy($$->HelperType, $1->HelperType);
+    
+                    strcpy($$->resultType, $1->resultType);
             }
 		    |   simple_expression ADDOP term {
-                    print_grammar_rule("simple_expression","simple_expression ADDOP term");
+                    print_rule("simple_expression","simple_expression ADDOP term");
 
-                    tnode *a = CreateTnode();
+                    ptnode *a = getNewNode();
                     strcpy(a->token,"simple_expression");
-                    a=ProgramNode($1,a);
-                    a=ProgramNode($2,a);
-                    a=ProgramNode($3,a);
+                    a=makeChildNode($1,a);
+                    a=makeChildNode($2,a);
+                    a=makeChildNode($3,a);
                     $$ = a;
 
-                    string typecast_ret = do_implicit_typecast($1->HelperType,$3->HelperType);
+                    string typecast_ret = typecast($1->resultType,$3->resultType);
 
                     if(typecast_ret != "NULL")
                     {
-                        if(typecast_ret != "error")     strcpy($$->HelperType, typecast_ret.c_str());
+                        if(typecast_ret != "error")     strcpy($$->resultType, typecast_ret.c_str());
                         else {
-                            if(!strcmp($1->HelperType, "void") || !strcmp($3->HelperType, "void"))
+                            if(!strcmp($1->resultType, "void") || !strcmp($3->resultType, "void"))
                             {
-                                error_type_cast_void();
+                                void_expression_error();
                             }
                             else
                             {
-                                error_type_cast();
+                                typecast_error();
                             }
 
-                            strcpy($$->HelperType, "NULL");
+                            strcpy($$->resultType, "NULL");
                         }
                     }
                     else
                     {
-                        strcpy($$->HelperType, "NULL");
+                        strcpy($$->resultType, "NULL");
                     }
             }
 		    ;
 					
 term:	unary_expression {
 
-            print_grammar_rule("term","unary_expression");
-            tnode *a = CreateTnode();
+            print_rule("term","unary_expression");
+            ptnode *a = getNewNode();
             strcpy(a->token,"term");
-            a=ProgramNode($1,a);
+            a=makeChildNode($1,a);
             $$ = a;
 
-            // update vector : push up
-            strcpy($$->HelperType, $1->HelperType);
+
+            strcpy($$->resultType, $1->resultType);
     }
     |  term MULOP unary_expression {
 
-            print_grammar_rule("term","term MULOP unary_expression");
+            print_rule("term","term MULOP unary_expression");
 
-            tnode *a = CreateTnode();
+            ptnode *a = getNewNode();
             strcpy(a->token,"term");
-            a=ProgramNode($1,a);
-            a=ProgramNode($2,a);
-            a=ProgramNode($3,a);
+            a=makeChildNode($1,a);
+            a=makeChildNode($2,a);
+            a=makeChildNode($3,a);
             $$ = a;
 
-            // implicit typecast
-            string typecast_ret = do_implicit_typecast($1->HelperType,$3->HelperType);
+
+            string typecast_ret = typecast($1->resultType,$3->resultType);
 
             if($2->lexeme == "%")
             {
-                if(!strcmp($3->valname,"0"))
+                if(!strcmp($3->value,"0"))
                 {
                     fprintf(errout, "Line# %d: Warning: modulus by zero\n", line_count);
                     err_count++;
-                    strcpy($$->HelperType, "NULL");
+                    strcpy($$->resultType, "NULL");
                 }
                 else
                 {
@@ -1688,10 +1588,10 @@ term:	unary_expression {
                     {
                         fprintf(errout, "Line# %d: Operands of modulus must be integers\n", line_count);
                         err_count++;
-                        strcpy($$->HelperType, "NULL");
+                        strcpy($$->resultType, "NULL");
                     }
                     else{
-                        strcpy($$->HelperType, "int");
+                        strcpy($$->resultType, "int");
                     }
                 }
             }
@@ -1699,105 +1599,105 @@ term:	unary_expression {
             {
                 if(typecast_ret != "NULL")
                 {
-                    if(typecast_ret != "error") strcpy($$->HelperType, typecast_ret.c_str());
+                    if(typecast_ret != "error") strcpy($$->resultType, typecast_ret.c_str());
                     else {
-                        if(strcmp($1->HelperType, "void")==0 || strcmp($3->HelperType, "void")==0)
+                        if(strcmp($1->resultType, "void")==0 || strcmp($3->resultType, "void")==0)
                         {
-                            error_type_cast_void();
+                            void_expression_error();
                         }
                         else
                         {
-                            error_type_cast();
+                            typecast_error();
                         }
 
-                        strcpy($$->HelperType, "NULL");
+                        strcpy($$->resultType, "NULL");
                     }
                 }
                 else
                 {
-                    strcpy($$->HelperType, "NULL");
+                    strcpy($$->resultType, "NULL");
                 }
             }
     }
     ;
 
 unary_expression: ADDOP unary_expression  {
-                print_grammar_rule("unary_expression","ADDOP unary_expression");
-                tnode *a = CreateTnode();
+                print_rule("unary_expression","ADDOP unary_expression");
+                ptnode *a = getNewNode();
                 strcpy(a->token,"unary_expression");
-                a=ProgramNode($1,a);
-                a=ProgramNode($2,a);
+                a=makeChildNode($1,a);
+                a=makeChildNode($2,a);
                 $$ = a;
-                // implicit typecast
-                strcpy($$->HelperType, $2->HelperType);
+    
+                strcpy($$->resultType, $2->resultType);
             }
 		    | NOT unary_expression {
-                print_grammar_rule("unary_expression","NOT unary_expression");
-                tnode *a = CreateTnode();
+                print_rule("unary_expression","NOT unary_expression");
+                ptnode *a = getNewNode();
                 strcpy(a->token,"unary_expression");
-                a=ProgramNode("NOT",a);
-                a=ProgramNode($2,a);
+                a=makeChildNode("NOT",a);
+                a=makeChildNode($2,a);
                 $$ = a;
-                // implicit typecast
-                strcpy($$->HelperType, $2->HelperType);
+    
+                strcpy($$->resultType, $2->resultType);
             }
 		    | factor  { 
-                print_grammar_rule("unary_expression","factor");
-                tnode *a = CreateTnode();
+                print_rule("unary_expression","factor");
+                ptnode *a = getNewNode();
                 strcpy(a->token,"unary_expression");
-                a=ProgramNode($1,a);
+                a=makeChildNode($1,a);
                 $$ = a;
-                strcpy($$->valname, $1->valname);
-                // implicit typecast
-                strcpy($$->HelperType, $1->HelperType);
+                strcpy($$->value, $1->value);
+    
+                strcpy($$->resultType, $1->resultType);
             }
 		 ;
 	
 factor: variable {
 
-            print_grammar_rule("factor","variable");
-            tnode *a = CreateTnode();
+            print_rule("factor","variable");
+            ptnode *a = getNewNode();
             strcpy(a->token,"factor");
-            a=ProgramNode($1,a);
+            a=makeChildNode($1,a);
             $$ = a;
 
-            // implicit typecast
-            strcpy($$->HelperType, $1->HelperType);
+
+            strcpy($$->resultType, $1->resultType);
         }
 	| ID LPAREN argument_list RPAREN {
 
-            print_grammar_rule("factor","ID LPAREN argument_list RPAREN");
-            tnode *a = CreateTnode();
+            print_rule("factor","ID LPAREN argument_list RPAREN");
+            ptnode *a = getNewNode();
             strcpy(a->token,"factor");
-            a=ProgramNode($1,a);
-            a=ProgramNode("LPAREN",a);
-            a=ProgramNode($3,a);
-            a=ProgramNode("RPAREN",a);
+            a=makeChildNode($1,a);
+            a=makeChildNode("LPAREN",a);
+            a=makeChildNode($3,a);
+            a=makeChildNode("RPAREN",a);
             $$ = a;
 
-            // check error
+
             SymbolInfo* ret_symbol = sym_tab->_search($1->lexeme);
 
             if(ret_symbol == NULL)
             {
                 fprintf(errout, "Line# %d: Undeclared function \'%s\'\n", line_count, ($1->lexeme).data());
                 err_count++;
-                strcpy($$->HelperType,"NULL");
+                strcpy($$->resultType,"NULL");
             }
             else
             {
                 if(ret_symbol->isFunc == false)
                 {
-                    strcpy($$->HelperType,"NULL");
+                    strcpy($$->resultType,"NULL");
                     fprintf(errout, "Line# %d: %s not a function\n", line_count, ($1->lexeme).data());
                     err_count++;
                 }
 
-                //convert data_type to lowercase and pass it up as HelperType of 'factor'
+                //convert data_type to lowercase and pass it up as resultType of 'factor'
                 char *temp = new char(100);
                 strcpy(temp, ret_symbol->data_type.c_str());
                 for(int i = 0; i < 100; i++)    temp[i] = tolower(temp[i]);
-                strcpy($$->HelperType, temp);
+                strcpy($$->resultType, temp);
                 free(temp);
                 //
 
@@ -1806,7 +1706,7 @@ factor: variable {
                     fprintf(errout, "Line# %d: Function declared, but not defined\n", line_count);
                     err_count++;
                 }
-                else // other errors
+                else
                 {
                     if(($3->args_list.size() - ret_symbol->args_list.size()) > 0){
                         fprintf(errout, "Line# %d: Too many arguments to function \'%s\'\n", line_count, (ret_symbol->lexeme).data());
@@ -1820,7 +1720,7 @@ factor: variable {
                     {
                         for(int i=0;i<ret_symbol->args_list.size();i++)
                         {
-                            if(!is_param_typecast_ok(ret_symbol->args_list[i], $3->args_list[i])){
+                            if(!is_typecast_valid(ret_symbol->args_list[i], $3->args_list[i])){
                                 fprintf(errout, "Line# %d: Type mismatch for argument %d of \'%s\'\n", line_count, (i+1), (ret_symbol->lexeme).data());
                                 err_count++;
                             }
@@ -1831,77 +1731,72 @@ factor: variable {
         }
 	| LPAREN expression RPAREN {
 
-            print_grammar_rule("factor","LPAREN expression RPAREN");
-            tnode *a = CreateTnode();
+            print_rule("factor","LPAREN expression RPAREN");
+            ptnode *a = getNewNode();
             strcpy(a->token,"factor");
-            a=ProgramNode("LPAREN",a);
-            a=ProgramNode($2,a);
-            a=ProgramNode("RPAREN",a);
+            a=makeChildNode("LPAREN",a);
+            a=makeChildNode($2,a);
+            a=makeChildNode("RPAREN",a);
             $$ = a;
         
-            strcpy($$->HelperType, $2->HelperType);
+            strcpy($$->resultType, $2->resultType);
         }
 	| CONST_INT  { 
-            print_grammar_rule("factor","CONST_INT");
-            tnode *a = CreateTnode();
+            print_rule("factor","CONST_INT");
+            ptnode *a = getNewNode();
             strcpy(a->token,"factor");
-            a=ProgramNode($1,a);
+            a=makeChildNode($1,a);
             $$ = a;
-            strcpy($$->valname, $1->lexeme.c_str());
-            // pass up
-            strcpy($$->HelperType, "int");
+            strcpy($$->value, $1->lexeme.c_str());
+            strcpy($$->resultType, "int");
         }
 	| CONST_FLOAT  { 
-            print_grammar_rule("factor","CONST_FLOAT");
-            tnode *a = CreateTnode();
+            print_rule("factor","CONST_FLOAT");
+            ptnode *a = getNewNode();
             strcpy(a->token,"factor");
-            a=ProgramNode($1,a);
+            a=makeChildNode($1,a);
             $$ = a;
-            strcpy($$->valname, $1->lexeme.c_str());
-            // pass up
-            strcpy($$->HelperType, "float");
+            strcpy($$->value, $1->lexeme.c_str());
+            strcpy($$->resultType, "float");
         }
     | ERROR_FLOAT  { 
-            print_grammar_rule("factor","ERROR_FLOAT");
-            tnode *a = CreateTnode();
+            print_rule("factor","ERROR_FLOAT");
+            ptnode *a = getNewNode();
             strcpy(a->token,"factor");
-            a=ProgramNode($1,a);
+            a=makeChildNode($1,a);
             $$ = a;
-            strcpy($$->valname, $1->lexeme.c_str());
-            // pass up
-            strcpy($$->HelperType, "NULL");
+            strcpy($$->value, $1->lexeme.c_str());
+            strcpy($$->resultType, "NULL");
         }
 	| variable INCOP {
-            print_grammar_rule("factor","variable INCOP");
-            tnode *a = CreateTnode();
+            print_rule("factor","variable INCOP");
+            ptnode *a = getNewNode();
             strcpy(a->token,"factor");
-            a=ProgramNode($1,a);
-            a=ProgramNode("INCOP",a);
+            a=makeChildNode($1,a);
+            a=makeChildNode("INCOP",a);
             $$ = a;
         }
 	| variable DECOP {
-            print_grammar_rule("factor","variable DECOP");
-            tnode *a = CreateTnode();
+            print_rule("factor","variable DECOP");
+            ptnode *a = getNewNode();
             strcpy(a->token,"factor");
-            a=ProgramNode($1,a);
-            a=ProgramNode("DECOP",a);
+            a=makeChildNode($1,a);
+            a=makeChildNode("DECOP",a);
             $$ = a;
         }
 	;
 	
 argument_list: arguments {
-
-                    print_grammar_rule("argument_list","arguments");
-                    tnode *a = CreateTnode();
+                    print_rule("argument_list","arguments");
+                    ptnode *a = getNewNode();
                     strcpy(a->token,"argument_list");
-                    a=ProgramNode($1,a);
+                    a=makeChildNode($1,a);
                     $$ = a;
-
                     $$->args_list = $1->args_list; 
                 }
 			| {
-                print_grammar_rule("argument_list","");
-                tnode *a = CreateTnode();
+                print_rule("argument_list","");
+                ptnode *a = getNewNode();
                 strcpy(a->token,"argument_list");
                 $$ = a;
             }   
@@ -1909,29 +1804,29 @@ argument_list: arguments {
 	
 arguments: arguments COMMA logic_expression {
 
-                print_grammar_rule("arguments","arguments COMMA logic_expression");
-                tnode *a = CreateTnode();
+                print_rule("arguments","arguments COMMA logic_expression");
+                ptnode *a = getNewNode();
                 strcpy(a->token,"arguments");
-                a=ProgramNode($1,a);
-                a=ProgramNode("COMMA",a);
-                a=ProgramNode($3,a);
+                a=makeChildNode($1,a);
+                a=makeChildNode("COMMA",a);
+                a=makeChildNode($3,a);
                 $$ = a;
 
-                // update vector
+
                 $$->args_list = $1->args_list; 
-                $$->args_list.push_back($3->HelperType);
+                $$->args_list.push_back($3->resultType);
             }
 	    | logic_expression {
 
-                print_grammar_rule("arguments","logic_expression");
-                tnode *a = CreateTnode();
+                print_rule("arguments","logic_expression");
+                ptnode *a = getNewNode();
                 strcpy(a->token,"arguments");
-                a=ProgramNode($1,a);
+                a=makeChildNode($1,a);
                 $$ = a;
 
-                // update helper type
-                strcpy($$->HelperType, $1->HelperType);
-                $$->args_list.push_back($1->HelperType);
+
+                strcpy($$->resultType, $1->resultType);
+                $$->args_list.push_back($1->resultType);
             }
 	    ;
 
@@ -1956,7 +1851,7 @@ main(int argc,char *argv[])
 
     yyin=fin;
 	yyparse();
-    if(NTnode != NULL) printtree(NTnode);
+    if(Root != NULL) printtree(Root);
 
     fprintf(logout, "Total lines: %d\n", line_count);
     fprintf(logout, "Total errors: %d\n", err_count);

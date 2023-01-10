@@ -101,93 +101,92 @@ int yylex(void);
 
 SymbolTable *sym_tab = new SymbolTable(10);
 
-bool is_function_now = false;
-vector<SymbolInfo>function_params;
+bool curr_ID_func = false;
+vector<SymbolInfo> temp_param_list;
 
 
-string do_implicit_typecast(char* left_op, char* right_op)
+string typecast(char* left, char* right)
 {
-    if(!strcmp(left_op,"NULL") || !strcmp(right_op,"NULL")) return "NULL";
+    if(!strcmp(left,"NULL") || !strcmp(right,"NULL")) return "NULL";
 
-    if(!strcmp(left_op,"void") || !strcmp(right_op,"void")) return "error";
+    if(!strcmp(left,"void") || !strcmp(right,"void")) return "error";
 
-    if((!strcmp(left_op,"float") || !strcmp(left_op,"float_array")) && (!strcmp(right_op,"float") || !strcmp(right_op,"float_array"))) return "float";
-    if((!strcmp(left_op,"float") || !strcmp(left_op,"float_array")) && (!strcmp(right_op,"int") || !strcmp(right_op,"int_array"))) return "float";
-    if((!strcmp(left_op,"int") || !strcmp(left_op,"int_array")) && (!strcmp(right_op,"float") || !strcmp(right_op,"float_array"))) return "float";
-    if((!strcmp(left_op,"int") || !strcmp(left_op,"int_array")) && (!strcmp(right_op,"int") || !strcmp(right_op,"int_array"))) return "int";
+    if((!strcmp(left,"float") || !strcmp(left,"float_array")) && (!strcmp(right,"float") || !strcmp(right,"float_array"))) return "float";
+    if((!strcmp(left,"float") || !strcmp(left,"float_array")) && (!strcmp(right,"int") || !strcmp(right,"int_array"))) return "float";
+    if((!strcmp(left,"int") || !strcmp(left,"int_array")) && (!strcmp(right,"float") || !strcmp(right,"float_array"))) return "float";
+    if((!strcmp(left,"int") || !strcmp(left,"int_array")) && (!strcmp(right,"int") || !strcmp(right,"int_array"))) return "int";
 
     return "error";
 }
 
-bool is_param_typecast_ok(string og_p,string pass_p)
+bool is_typecast_valid(string required,string given)
 {
-    if(og_p == "void") return pass_p == "void";
-    if(og_p == "int") return (pass_p == "int" || pass_p == "int_array");
-    if(og_p == "float") return pass_p == "float";
+    if(required == "void") return given == "void";
+    if(required == "int") return (given == "int" || given == "int_array");
+    if(required == "float") return given == "float";
 }
 
-bool check_assignop(char* left_op, char* right_op)
+bool is_assignment_valid(char* left, char* right)
 {
-    if(!strcmp(left_op,"NULL") || !strcmp(right_op,"NULL")) return true; 
+    if(!strcmp(left,"NULL") || !strcmp(right,"NULL")) return true; 
 
-    if(!strcmp(left_op,"void") || !strcmp(right_op,"void")) return false;
-    if(!strcmp(left_op,"") || !strcmp(right_op,"")) return false;
+    if(!strcmp(left,"void") || !strcmp(right,"void")) return false;
+    if(!strcmp(left,"") || !strcmp(right,"")) return false;
 
-    if((!strcmp(left_op,"int") || !strcmp(left_op,"int_array")) && (!strcmp(right_op,"int") || !strcmp(right_op,"int_array"))) return true;
-    
-    if((!strcmp(left_op,"float") || !strcmp(left_op,"float_array")) && strcmp(right_op,"void")) return true;
+    if((!strcmp(left,"int") || !strcmp(left,"int_array")) && (!strcmp(right,"int") || !strcmp(right,"int_array"))) return true;
+    if((!strcmp(left,"float") || !strcmp(left,"float_array")) && strcmp(right,"void")) return true;
 
     return false;
 }
 
-void print_grammar_rule(string head,string body)
+void print_rule(string head,string body)
 {
     fprintf(logout, "%s : %s\n", head.data(), body.data());
 }
 
-void error_multiple_declaration(string error_symbol, bool _isFunc)
+void mult_declaration_error(string error_symbol, bool _isFunc)
 {
     if(_isFunc) fprintf(errout, "Line# %d: Redefinition of parameter \'%s\'\n", line_count, error_symbol.data());
     else    fprintf(errout, "Line# %d: \'%s\' redeclared as different kind of symbol\n", line_count, error_symbol.data());
     err_count++;
 }
 
-void error_type_cast()
+void typecast_error()
 {
     fprintf(errout, "Line# %d: Incompatible Operand\n", line_count);
     err_count++;
 }
 
-void error_type_cast_void()
+void void_expression_error()
 {
     fprintf(errout, "Line# %d: Void cannot be used in expression\n", line_count);
     err_count++;
 }
 
-void error_type_mismatch(string msg)
+void type_conflict_error(string msg)
 {
     fprintf(errout, "Line# %d: Conflicting types for \'%s\'\n", line_count, msg.data());
     err_count++;
 }
 
-typedef struct tnode {
-    char valname[100];
+typedef struct ptnode {
+    char value[100];
     char token[100];
-    char HelperType[100];
+    char resultType[100];
     vector<string> args_list;
-    vector<SymbolInfo*> v;
+    vector<SymbolInfo*> args_info_list;
 	bool lastchild;
-	struct tnode *child;
-    struct tnode *ptr;
-} tnode;
+	struct ptnode *child;
+    struct ptnode *leaf;
+} ptnode;
 
-tnode *NTnode=NULL;
-int numWS = 0;
+ptnode *Root=NULL;
 string output = "\n";
+int numWS = 0;
 
-void printtree(tnode *node)
+void printtree(ptnode *node)
 {
-    tnode *itr;
+    ptnode *itr;
 
     for(int i=1;i<numWS;i++)   fprintf(parseout, " ");
 
@@ -195,8 +194,8 @@ void printtree(tnode *node)
 
     if(node->lastchild)
     {
-        fprintf(parseout, "%s-> %s\n", node->token, node->valname);
-        output.append(node->valname);
+        fprintf(parseout, "%s-> %s\n", node->token, node->value);
+        output.append(node->value);
         output.append(" ");
     }
     else
@@ -207,89 +206,87 @@ void printtree(tnode *node)
         numWS++;
     }
 
-    for(itr = node->child; itr != NULL; itr = itr->ptr)
-    printtree(itr);
+    for(itr = node->child; itr != NULL; itr = itr->leaf) printtree(itr);
 
-    if(node->lastchild==0)
-    numWS--;
+    if(node->lastchild==0) numWS--;
 }
 
-tnode* CreateTnode()
+ptnode* getNewNode()
 {
-    tnode *t = new struct tnode();
-    t->ptr = NULL;
+    ptnode *t = new struct ptnode();
+    t->leaf = NULL;
     t->child = NULL;
     t->lastchild = 0;
 
     strcpy(t->token, "");
-    strcpy(t->valname, "");
-    strcpy(t->HelperType, "");
+    strcpy(t->value, "");
+    strcpy(t->resultType, "");
 
     return(t);
 }
 
-tnode* ProgramNode(tnode* push, tnode* t)
+ptnode* makeChildNode(ptnode* to_insert, ptnode* root)
 {
-	if(t->child  ==  NULL)
-		t->child = push;
+	if(root->child  ==  NULL)
+		root->child = to_insert;
 	else
 	{
-		tnode *itr;
-		for(itr = t->child; itr->ptr != NULL; itr = itr->ptr);
-		itr->ptr = push;
+		ptnode *itr;
+		for(itr = root->child; itr->leaf != NULL; itr = itr->leaf);
+		itr->leaf = to_insert;
 	}
-	return(t);
+	return(root);
 }
 
-tnode* ProgramNode(SymbolInfo* sym, tnode* t)
+ptnode* makeChildNode(SymbolInfo* sym, ptnode* root)
 {
-	tnode *push = CreateTnode();
-	push->lastchild = 1;
-	strcpy(push->valname, sym->lexeme.c_str());
-	strcpy(push->token, sym->token.c_str());
-	t = ProgramNode(push,t);
+	ptnode *to_insert = getNewNode();
+	to_insert->lastchild = 1;
+	strcpy(to_insert->value, sym->lexeme.c_str());
+	strcpy(to_insert->token, sym->token.c_str());
+	root = makeChildNode(to_insert, root);
+	return (root);
+}
+
+ptnode* makeChildNode(string value, string token, ptnode* root)
+{
+	ptnode *to_insert = getNewNode();
+	to_insert->lastchild = 1;
+	strcpy(to_insert->value, value.c_str());
+	strcpy(to_insert->token, token.c_str());
+	root = makeChildNode(to_insert, root);
+	return (root);
+}
+
+ptnode* makeChildNode(string token, ptnode* t)
+{
+	ptnode *to_insert = getNewNode();
+	to_insert->lastchild = 1;
+    if(token == "LPAREN")   strcpy(to_insert->value, "(");
+    else if(token == "RPAREN")  strcpy(to_insert->value, ")");
+    else if(token == "COMMA")  strcpy(to_insert->value, ",");
+    else if(token == "SEMICOLON")  strcpy(to_insert->value, ";");
+    else if(token == "LCURL")  strcpy(to_insert->value, "{");
+    else if(token == "RCURL")  strcpy(to_insert->value, "}");
+    else if(token == "LTHIRD")  strcpy(to_insert->value, "[");
+    else if(token == "RTHIRD")  strcpy(to_insert->value, "]");
+    else if(token == "NOT")  strcpy(to_insert->value, "!");
+    else if(token == "ASSIGNOP")  strcpy(to_insert->value, "=");
+    else if(token == "DECOP")  strcpy(to_insert->value, "--");
+    else if(token == "INCOP")  strcpy(to_insert->value, "++");
+    else if(token == "RETURN")  strcpy(to_insert->value, "return");
+	strcpy(to_insert->token, token.c_str());
+	t = makeChildNode(to_insert,t);
 	return (t);
 }
 
-tnode* ProgramNode(string valname, string token, tnode* t)
-{
-	tnode *push = CreateTnode();
-	push->lastchild = 1;
-	strcpy(push->valname, valname.c_str());
-	strcpy(push->token, token.c_str());
-	t = ProgramNode(push,t);
-	return (t);
-}
-
-tnode* ProgramNode(string token, tnode* t)
-{
-	tnode *push = CreateTnode();
-	push->lastchild = 1;
-    if(token == "LPAREN")   strcpy(push->valname, "(");
-    else if(token == "RPAREN")  strcpy(push->valname, ")");
-    else if(token == "COMMA")  strcpy(push->valname, ",");
-    else if(token == "SEMICOLON")  strcpy(push->valname, ";");
-    else if(token == "LCURL")  strcpy(push->valname, "{");
-    else if(token == "RCURL")  strcpy(push->valname, "}");
-    else if(token == "LTHIRD")  strcpy(push->valname, "[");
-    else if(token == "RTHIRD")  strcpy(push->valname, "]");
-    else if(token == "NOT")  strcpy(push->valname, "!");
-    else if(token == "ASSIGNOP")  strcpy(push->valname, "=");
-    else if(token == "DECOP")  strcpy(push->valname, "--");
-    else if(token == "INCOP")  strcpy(push->valname, "++");
-    else if(token == "RETURN")  strcpy(push->valname, "return");
-	strcpy(push->token, token.c_str());
-	t = ProgramNode(push,t);
-	return (t);
-}
-
-void insert_function_to_global(SymbolInfo* temp_s,char* data_type)
+void insert_to_symtable(SymbolInfo* sym,char* data_type)
 {
     bool isParamListError = false;
 
-    for(int i=0;i<function_params.size();i++)
+    for(int i=0;i<temp_param_list.size();i++)
     {
-        if(function_params[i].lexeme == "dummy_key"){
+        if(temp_param_list[i].lexeme == "dummy_key"){
             fprintf(errout, "Line# %d: Syntax error at parameter list of function definition\n", line_count);
             err_count++;
             isParamListError = true;
@@ -299,39 +296,39 @@ void insert_function_to_global(SymbolInfo* temp_s,char* data_type)
 
     if(!isParamListError){
         
-        temp_s->token = "FUNCTION";
-        temp_s->data_type = data_type;
-        temp_s->isFunc = true;
+        sym->token = "FUNCTION";
+        sym->data_type = data_type;
+        sym->isFunc = true;
 
-        for(auto temp_p : function_params)
+        for(auto param : temp_param_list)
         {
-            temp_s->args_list.push_back(temp_p.data_type);
+            sym->args_list.push_back(param.data_type);
         }
 
-        if(!sym_tab->_insert(*temp_s))
+        if(!sym_tab->_insert(*sym))
         {
-            SymbolInfo* ret_symbol = sym_tab->_search(temp_s->lexeme);
+            SymbolInfo* ret_symbol = sym_tab->_search(sym->lexeme);
 
             if(ret_symbol->isFuncDecl == false){
-                error_multiple_declaration(temp_s->lexeme, ret_symbol->isFuncParam);
+                mult_declaration_error(sym->lexeme, ret_symbol->isFuncParam);
             }
             else{
-                if(ret_symbol->data_type != temp_s->data_type)
+                if(ret_symbol->data_type != sym->data_type)
                 {
-                    fprintf(errout, "Line# %d: Conflicting types for \'%s\'\n", line_count, (temp_s->lexeme).data());
+                    fprintf(errout, "Line# %d: Conflicting types for \'%s\'\n", line_count, (sym->lexeme).data());
                     err_count++;
                 }
 
-                if(ret_symbol->args_list.size() != temp_s->args_list.size())
+                if(ret_symbol->args_list.size() != sym->args_list.size())
                 {
-                    error_type_mismatch(temp_s->lexeme);
+                    type_conflict_error(sym->lexeme);
                 }
                 else
                 {
                     for(int i = 0; i < (ret_symbol->args_list.size()); i++)
                     {
-                        if(ret_symbol->args_list[i] != temp_s->args_list[i]){
-                            error_type_mismatch(temp_s->lexeme);
+                        if(ret_symbol->args_list[i] != sym->args_list[i]){
+                            type_conflict_error(sym->lexeme);
                         }
                     }
                 }
@@ -339,16 +336,14 @@ void insert_function_to_global(SymbolInfo* temp_s,char* data_type)
             }
         }
         else{
-            SymbolInfo* ret_symbol = sym_tab->_search(temp_s->lexeme);
+            SymbolInfo* ret_symbol = sym_tab->_search(sym->lexeme);
             ret_symbol->isFuncDecl = false;
         }
     }
-
-    
 }
 
 
-#line 352 "y.tab.c"
+#line 347 "y.tab.c"
 
 # ifndef YY_CAST
 #  ifdef __cplusplus
@@ -487,13 +482,13 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 283 "parser.y"
+#line 278 "parser.y"
 
-    SymbolInfo* symbol_info;
+    SymbolInfo* symInfo;
     char* string;
-    struct tnode *node;
+    struct ptnode *node;
 
-#line 497 "y.tab.c"
+#line 492 "y.tab.c"
 
 };
 typedef union YYSTYPE YYSTYPE;
@@ -975,16 +970,16 @@ static const yytype_int8 yytranslate[] =
 /* YYRLINE[YYN] -- Source line where rule number YYN was defined.  */
 static const yytype_int16 yyrline[] =
 {
-       0,   303,   303,   315,   323,   332,   339,   346,   355,   393,
-     431,   475,   518,   549,   584,   620,   658,   658,   674,   674,
-     697,   697,   713,   713,   741,   758,   781,   795,   816,   830,
-     844,   858,   872,   886,   900,   915,   935,   966,  1000,  1010,
-    1020,  1031,  1048,  1073,  1095,  1123,  1151,  1183,  1194,  1211,
-    1235,  1243,  1252,  1264,  1272,  1283,  1293,  1300,  1307,  1320,
-    1331,  1345,  1352,  1375,  1386,  1393,  1403,  1433,  1474,  1484,
-    1512,  1522,  1559,  1569,  1606,  1617,  1652,  1663,  1724,  1734,
-    1744,  1756,  1767,  1832,  1844,  1854,  1864,  1874,  1882,  1892,
-    1902,  1910,  1924
+       0,   297,   297,   309,   317,   326,   333,   340,   349,   386,
+     424,   462,   500,   531,   561,   592,   624,   624,   640,   640,
+     657,   657,   673,   673,   694,   711,   728,   742,   757,   771,
+     785,   799,   813,   827,   841,   856,   875,   906,   931,   941,
+     951,   962,   979,   998,  1020,  1042,  1065,  1088,  1099,  1116,
+    1135,  1143,  1152,  1164,  1172,  1183,  1193,  1200,  1207,  1220,
+    1231,  1245,  1252,  1275,  1286,  1293,  1303,  1333,  1374,  1384,
+    1412,  1422,  1459,  1469,  1506,  1517,  1552,  1563,  1624,  1634,
+    1644,  1656,  1667,  1732,  1744,  1753,  1762,  1771,  1779,  1789,
+    1797,  1805,  1819
 };
 #endif
 
@@ -1676,1454 +1671,1360 @@ yyreduce:
   switch (yyn)
     {
   case 2: /* start: program  */
-#line 304 "parser.y"
+#line 298 "parser.y"
         {
 		//write your code in this block in all the similar blocks below
 
-        print_grammar_rule("start","program");
+        print_rule("start","program");
 
-        NTnode = CreateTnode();
-        strcpy(NTnode->token,"start");
-        NTnode = ProgramNode((yyvsp[0].node),NTnode);
+        Root = getNewNode();
+        strcpy(Root->token,"start");
+        Root = makeChildNode((yyvsp[0].node),Root);
 	}
-#line 1690 "y.tab.c"
+#line 1685 "y.tab.c"
     break;
 
   case 3: /* program: program unit  */
-#line 315 "parser.y"
+#line 309 "parser.y"
                        {
-            print_grammar_rule("program","program unit");
-            tnode *a = CreateTnode();
+            print_rule("program","program unit");
+            ptnode *a = getNewNode();
             strcpy(a->token,"program");
-            a=ProgramNode((yyvsp[-1].node),a);
-            a=ProgramNode((yyvsp[0].node),a);
+            a=makeChildNode((yyvsp[-1].node),a);
+            a=makeChildNode((yyvsp[0].node),a);
             (yyval.node) = a;
         }
-#line 1703 "y.tab.c"
+#line 1698 "y.tab.c"
     break;
 
   case 4: /* program: unit  */
-#line 323 "parser.y"
+#line 317 "parser.y"
                { 
-            print_grammar_rule("program","unit");
-            tnode *a = CreateTnode();
+            print_rule("program","unit");
+            ptnode *a = getNewNode();
             strcpy(a->token,"program");
-            a=ProgramNode((yyvsp[0].node),a);
+            a=makeChildNode((yyvsp[0].node),a);
             (yyval.node) = a;
         }
-#line 1715 "y.tab.c"
+#line 1710 "y.tab.c"
     break;
 
   case 5: /* unit: var_declaration  */
-#line 332 "parser.y"
+#line 326 "parser.y"
                       { 
-            print_grammar_rule("unit","var_declaration"); 
-            tnode *a = CreateTnode();
+            print_rule("unit","var_declaration"); 
+            ptnode *a = getNewNode();
             strcpy(a->token,"unit");
-            a=ProgramNode((yyvsp[0].node),a);
+            a=makeChildNode((yyvsp[0].node),a);
             (yyval.node) = a;
         }
-#line 1727 "y.tab.c"
+#line 1722 "y.tab.c"
     break;
 
   case 6: /* unit: func_declaration  */
-#line 339 "parser.y"
+#line 333 "parser.y"
                         { 
-            print_grammar_rule("unit","func_declaration"); 
-            tnode *a = CreateTnode();
+            print_rule("unit","func_declaration"); 
+            ptnode *a = getNewNode();
             strcpy(a->token,"unit");
-            a=ProgramNode((yyvsp[0].node),a);
+            a=makeChildNode((yyvsp[0].node),a);
             (yyval.node) = a;
         }
-#line 1739 "y.tab.c"
+#line 1734 "y.tab.c"
     break;
 
   case 7: /* unit: func_definition  */
-#line 346 "parser.y"
+#line 340 "parser.y"
                        { 
-            print_grammar_rule("unit","func_definition");
-            tnode *a = CreateTnode();
+            print_rule("unit","func_definition");
+            ptnode *a = getNewNode();
             strcpy(a->token,"unit");
-            a=ProgramNode((yyvsp[0].node),a);
+            a=makeChildNode((yyvsp[0].node),a);
             (yyval.node) = a;
         }
-#line 1751 "y.tab.c"
+#line 1746 "y.tab.c"
     break;
 
   case 8: /* func_declaration: type_specifier ID LPAREN parameter_list RPAREN SEMICOLON  */
-#line 355 "parser.y"
+#line 349 "parser.y"
                                                                            {  
-                print_grammar_rule("func_declaration","type_specifier ID LPAREN parameter_list RPAREN SEMICOLON");
+                print_rule("func_declaration","type_specifier ID LPAREN parameter_list RPAREN SEMICOLON");
 
-                tnode *a = CreateTnode();
+                ptnode *a = getNewNode();
                 strcpy(a->token,"func_declaration");
-                a=ProgramNode((yyvsp[-5].node),a);
-                a=ProgramNode((yyvsp[-4].symbol_info),a);
-                a=ProgramNode("LPAREN", a);
-                a=ProgramNode((yyvsp[-2].node),a);
-                a=ProgramNode("RPAREN", a);
-                a=ProgramNode("SEMICOLON", a);
+                a=makeChildNode((yyvsp[-5].node),a);
+                a=makeChildNode((yyvsp[-4].symInfo),a);
+                a=makeChildNode("LPAREN", a);
+                a=makeChildNode((yyvsp[-2].node),a);
+                a=makeChildNode("RPAREN", a);
+                a=makeChildNode("SEMICOLON", a);
                 (yyval.node) = a;        
 
-                // insert function ID to SymbolTable with data_type
-                (yyvsp[-4].symbol_info)->setDataType((yyvsp[-5].node)->token);
-                (yyvsp[-4].symbol_info)->token = "FUNCTION";
-                (yyvsp[-4].symbol_info)->isFunc = true;
+                (yyvsp[-4].symInfo)->setDataType((yyvsp[-5].node)->token);
+                (yyvsp[-4].symInfo)->token = "FUNCTION";
+                (yyvsp[-4].symInfo)->isFunc = true;
 
-                // update parameter type
-                for(auto temp_s : function_params)
+
+                for(auto sym : temp_param_list)
                 {
-                    (yyvsp[-4].symbol_info)->args_list.push_back(temp_s.data_type);
+                    (yyvsp[-4].symInfo)->args_list.push_back(sym.data_type);
                 }
                 
-                if(sym_tab->_insert(*(yyvsp[-4].symbol_info)))
+                if(sym_tab->_insert(*(yyvsp[-4].symInfo)))
                 {
-                    SymbolInfo* ret_symbol = sym_tab->_search((yyvsp[-4].symbol_info)->lexeme);
-                    ret_symbol->isFuncDecl = true; // mark as function declaration
+                    SymbolInfo* ret_symbol = sym_tab->_search((yyvsp[-4].symInfo)->lexeme);
+                    ret_symbol->isFuncDecl = true;
                 }
                 else
                 {
-                    SymbolInfo* ret_symbol = sym_tab->_search((yyvsp[-4].symbol_info)->lexeme);
-                    error_multiple_declaration((yyvsp[-4].symbol_info)->lexeme, ret_symbol->isFuncParam);
+                    SymbolInfo* ret_symbol = sym_tab->_search((yyvsp[-4].symInfo)->lexeme);
+                    mult_declaration_error((yyvsp[-4].symInfo)->lexeme, ret_symbol->isFuncParam);
                 }
 
-                // clear param_info
-                function_params.clear();
+
+                temp_param_list.clear();
         }
-#line 1794 "y.tab.c"
+#line 1788 "y.tab.c"
     break;
 
   case 9: /* func_declaration: type_specifier ID LPAREN parameter_list RPAREN error  */
-#line 393 "parser.y"
+#line 386 "parser.y"
                                                                { 
                 
-                print_grammar_rule("func_declaration","type_specifier ID LPAREN parameter_list RPAREN");
+                print_rule("func_declaration","type_specifier ID LPAREN parameter_list RPAREN");
 
-                tnode *a = CreateTnode();
+                ptnode *a = getNewNode();
                 strcpy(a->token,"func_declaration");
-                a=ProgramNode((yyvsp[-5].node),a);
-                a=ProgramNode((yyvsp[-4].symbol_info),a);
-                a=ProgramNode("LPAREN", a);
-                a=ProgramNode((yyvsp[-2].node),a);
-                a=ProgramNode("RPAREN", a);
+                a=makeChildNode((yyvsp[-5].node),a);
+                a=makeChildNode((yyvsp[-4].symInfo),a);
+                a=makeChildNode("LPAREN", a);
+                a=makeChildNode((yyvsp[-2].node),a);
+                a=makeChildNode("RPAREN", a);
                 (yyval.node) = a;
 
-                // insert function ID to SymbolTable with data_type
-                (yyvsp[-4].symbol_info)->setDataType((yyvsp[-5].node)->token);
-                (yyvsp[-4].symbol_info)->token = "FUNCTION";
-                (yyvsp[-4].symbol_info)->isFunc = true;
 
-                // update parameter type
-                for(auto temp_s : function_params)
+                (yyvsp[-4].symInfo)->setDataType((yyvsp[-5].node)->token);
+                (yyvsp[-4].symInfo)->token = "FUNCTION";
+                (yyvsp[-4].symInfo)->isFunc = true;
+
+
+                for(auto sym : temp_param_list)
                 {
-                    (yyvsp[-4].symbol_info)->args_list.push_back(temp_s.data_type);
+                    (yyvsp[-4].symInfo)->args_list.push_back(sym.data_type);
                 }
 
-                if(sym_tab->_insert(*(yyvsp[-4].symbol_info)))
+                if(sym_tab->_insert(*(yyvsp[-4].symInfo)))
                 {
-                    SymbolInfo* ret_symbol = sym_tab->_search((yyvsp[-4].symbol_info)->lexeme);
-                    ret_symbol->isFuncDecl = true; // mark as function declaration
+                    SymbolInfo* ret_symbol = sym_tab->_search((yyvsp[-4].symInfo)->lexeme);
+                    ret_symbol->isFuncDecl = true;
                 }
                 else
                 {
-                    SymbolInfo* ret_symbol = sym_tab->_search((yyvsp[-4].symbol_info)->lexeme);
-                    error_multiple_declaration((yyvsp[-4].symbol_info)->lexeme, ret_symbol->isFuncParam);
+                    SymbolInfo* ret_symbol = sym_tab->_search((yyvsp[-4].symInfo)->lexeme);
+                    mult_declaration_error((yyvsp[-4].symInfo)->lexeme, ret_symbol->isFuncParam);
                 }
 
-                // clear param_info
-                function_params.clear();    
+
+                temp_param_list.clear();    
         }
-#line 1837 "y.tab.c"
+#line 1831 "y.tab.c"
     break;
 
   case 10: /* func_declaration: type_specifier ID LPAREN parameter_list error RPAREN SEMICOLON  */
-#line 431 "parser.y"
+#line 424 "parser.y"
                                                                          { 
+                print_rule("func_declaration","type_specifier ID LPAREN parameter_list RPAREN SEMICOLON");
 
-                /**
-                    To handle errors like: 
-                        void foo(int x-y);
-                **/
-                
-                print_grammar_rule("func_declaration","type_specifier ID LPAREN parameter_list RPAREN SEMICOLON");
-
-                tnode *a = CreateTnode();
+                ptnode *a = getNewNode();
                 strcpy(a->token,"func_declaration");
-                a=ProgramNode((yyvsp[-6].node),a);
-                a=ProgramNode((yyvsp[-5].symbol_info),a);
-                a=ProgramNode("LPAREN", a);
-                a=ProgramNode((yyvsp[-3].node),a);
-                a=ProgramNode("RPAREN", a);
-                a=ProgramNode("SEMICOLON", a);
+                a=makeChildNode((yyvsp[-6].node),a);
+                a=makeChildNode((yyvsp[-5].symInfo),a);
+                a=makeChildNode("LPAREN", a);
+                a=makeChildNode((yyvsp[-3].node),a);
+                a=makeChildNode("RPAREN", a);
+                a=makeChildNode("SEMICOLON", a);
                 (yyval.node) = a;
 
-                // insert function ID to SymbolTable with data_type
-                (yyvsp[-5].symbol_info)->setDataType((yyvsp[-6].node)->token);
-                (yyvsp[-5].symbol_info)->token = "FUNCTION";
-                (yyvsp[-5].symbol_info)->isFunc = true;
 
-                // update parameter type
-                for(auto temp_s : function_params)
+                (yyvsp[-5].symInfo)->setDataType((yyvsp[-6].node)->token);
+                (yyvsp[-5].symInfo)->token = "FUNCTION";
+                (yyvsp[-5].symInfo)->isFunc = true;
+
+
+                for(auto sym : temp_param_list)
                 {
-                    (yyvsp[-5].symbol_info)->args_list.push_back(temp_s.data_type);
+                    (yyvsp[-5].symInfo)->args_list.push_back(sym.data_type);
                 }
 
-                if(sym_tab->_insert(*(yyvsp[-5].symbol_info)))
+                if(sym_tab->_insert(*(yyvsp[-5].symInfo)))
                 {
-                    SymbolInfo* ret_symbol = sym_tab->_search((yyvsp[-5].symbol_info)->lexeme);
-                    ret_symbol->isFuncDecl = true; // mark as function declaration
+                    SymbolInfo* ret_symbol = sym_tab->_search((yyvsp[-5].symInfo)->lexeme);
+                    ret_symbol->isFuncDecl = true;
                 }
                 else
                 {
-                    SymbolInfo* ret_symbol = sym_tab->_search((yyvsp[-5].symbol_info)->lexeme);
-                    error_multiple_declaration((yyvsp[-5].symbol_info)->lexeme, ret_symbol->isFuncParam);
+                    SymbolInfo* ret_symbol = sym_tab->_search((yyvsp[-5].symInfo)->lexeme);
+                    mult_declaration_error((yyvsp[-5].symInfo)->lexeme, ret_symbol->isFuncParam);
                 }
 
-                // clear param_info
-                function_params.clear();
+
+                temp_param_list.clear();
         }
-#line 1886 "y.tab.c"
+#line 1874 "y.tab.c"
     break;
 
   case 11: /* func_declaration: type_specifier ID LPAREN parameter_list error RPAREN error  */
-#line 475 "parser.y"
+#line 462 "parser.y"
                                                                      { 
-
-                /**
-                    To handle errors like: 
-                        void foo(int x-y)
-                **/
                 
-                print_grammar_rule("func_declaration","type_specifier ID LPAREN parameter_list RPAREN");
+                print_rule("func_declaration","type_specifier ID LPAREN parameter_list RPAREN");
 
-                tnode *a = CreateTnode();
+                ptnode *a = getNewNode();
                 strcpy(a->token,"func_declaration");
-                a=ProgramNode((yyvsp[-6].node),a);
-                a=ProgramNode((yyvsp[-5].symbol_info),a);
-                a=ProgramNode("LPAREN", a);
-                a=ProgramNode((yyvsp[-3].node),a);
-                a=ProgramNode("RPAREN", a);
+                a=makeChildNode((yyvsp[-6].node),a);
+                a=makeChildNode((yyvsp[-5].symInfo),a);
+                a=makeChildNode("LPAREN", a);
+                a=makeChildNode((yyvsp[-3].node),a);
+                a=makeChildNode("RPAREN", a);
                 (yyval.node) = a;
 
-                // insert function ID to SymbolTable with data_type
-                (yyvsp[-5].symbol_info)->setDataType((yyvsp[-6].node)->token);
-                (yyvsp[-5].symbol_info)->token = "FUNCTION";
-                (yyvsp[-5].symbol_info)->isFunc = true;
 
-                // update parameter type
-                for(auto temp_s : function_params)
+                (yyvsp[-5].symInfo)->setDataType((yyvsp[-6].node)->token);
+                (yyvsp[-5].symInfo)->token = "FUNCTION";
+                (yyvsp[-5].symInfo)->isFunc = true;
+
+
+                for(auto sym : temp_param_list)
                 {
-                    (yyvsp[-5].symbol_info)->args_list.push_back(temp_s.data_type);
+                    (yyvsp[-5].symInfo)->args_list.push_back(sym.data_type);
                 }
 
-                if(sym_tab->_insert(*(yyvsp[-5].symbol_info)))
+                if(sym_tab->_insert(*(yyvsp[-5].symInfo)))
                 {
-                    SymbolInfo* ret_symbol = sym_tab->_search((yyvsp[-5].symbol_info)->lexeme);
-                    ret_symbol->isFuncDecl = true; // mark as function declaration
+                    SymbolInfo* ret_symbol = sym_tab->_search((yyvsp[-5].symInfo)->lexeme);
+                    ret_symbol->isFuncDecl = true;
                 }
                 else
                 {
-                    SymbolInfo* ret_symbol = sym_tab->_search((yyvsp[-5].symbol_info)->lexeme);
-                    error_multiple_declaration((yyvsp[-5].symbol_info)->lexeme, ret_symbol->isFuncParam);
+                    SymbolInfo* ret_symbol = sym_tab->_search((yyvsp[-5].symInfo)->lexeme);
+                    mult_declaration_error((yyvsp[-5].symInfo)->lexeme, ret_symbol->isFuncParam);
                 }
 
-                // clear param_info
-                function_params.clear();
+
+                temp_param_list.clear();
         }
-#line 1934 "y.tab.c"
+#line 1917 "y.tab.c"
     break;
 
   case 12: /* func_declaration: type_specifier ID LPAREN RPAREN SEMICOLON  */
-#line 518 "parser.y"
+#line 500 "parser.y"
                                                             { 
 
-                print_grammar_rule("func_declaration","type_specifier ID LPAREN RPAREN SEMICOLON");
+                print_rule("func_declaration","type_specifier ID LPAREN RPAREN SEMICOLON");
 
-                tnode *a = CreateTnode();
+                ptnode *a = getNewNode();
                 strcpy(a->token,"func_declaration");
-                a=ProgramNode((yyvsp[-4].node),a);
-                a=ProgramNode((yyvsp[-3].symbol_info),a);
-                a=ProgramNode("LPAREN", a);
-                a=ProgramNode("RPAREN", a);
-                a=ProgramNode("SEMICOLON", a);
+                a=makeChildNode((yyvsp[-4].node),a);
+                a=makeChildNode((yyvsp[-3].symInfo),a);
+                a=makeChildNode("LPAREN", a);
+                a=makeChildNode("RPAREN", a);
+                a=makeChildNode("SEMICOLON", a);
                 (yyval.node) = a;
 
-                // insert function ID to SymbolTable with data_type
-                (yyvsp[-3].symbol_info)->setDataType((yyvsp[-4].node)->token);
-                (yyvsp[-3].symbol_info)->token = "FUNCTION";
-                (yyvsp[-3].symbol_info)->isFunc = true;
+
+                (yyvsp[-3].symInfo)->setDataType((yyvsp[-4].node)->token);
+                (yyvsp[-3].symInfo)->token = "FUNCTION";
+                (yyvsp[-3].symInfo)->isFunc = true;
                 
-                if(sym_tab->_insert(*(yyvsp[-3].symbol_info)))
+                if(sym_tab->_insert(*(yyvsp[-3].symInfo)))
                 {
-                    SymbolInfo* ret_symbol = sym_tab->_search((yyvsp[-3].symbol_info)->lexeme);
-                    ret_symbol->isFuncDecl = true; // mark as function declaration
+                    SymbolInfo* ret_symbol = sym_tab->_search((yyvsp[-3].symInfo)->lexeme);
+                    ret_symbol->isFuncDecl = true;
                 }
                 else
                 {
-                    SymbolInfo* ret_symbol = sym_tab->_search((yyvsp[-3].symbol_info)->lexeme);
-                    error_multiple_declaration((yyvsp[-3].symbol_info)->lexeme, ret_symbol->isFuncParam);
+                    SymbolInfo* ret_symbol = sym_tab->_search((yyvsp[-3].symInfo)->lexeme);
+                    mult_declaration_error((yyvsp[-3].symInfo)->lexeme, ret_symbol->isFuncParam);
                 }
 
-                function_params.clear();
+                temp_param_list.clear();
             }
-#line 1970 "y.tab.c"
+#line 1953 "y.tab.c"
     break;
 
   case 13: /* func_declaration: type_specifier ID LPAREN RPAREN error  */
-#line 549 "parser.y"
+#line 531 "parser.y"
                                                     { 
 
-                /**
-                    To handle errors like: 
-                        void foo()
-                **/
+            print_rule("func_declaration","type_specifier ID LPAREN RPAREN");
 
-            print_grammar_rule("func_declaration","type_specifier ID LPAREN RPAREN");
-
-            tnode *a = CreateTnode();
+            ptnode *a = getNewNode();
             strcpy(a->token,"func_declaration");
-            a=ProgramNode((yyvsp[-4].node),a);
-            a=ProgramNode((yyvsp[-3].symbol_info),a);
-            a=ProgramNode("LPAREN", a);
-            a=ProgramNode("RPAREN", a);
+            a=makeChildNode((yyvsp[-4].node),a);
+            a=makeChildNode((yyvsp[-3].symInfo),a);
+            a=makeChildNode("LPAREN", a);
+            a=makeChildNode("RPAREN", a);
             (yyval.node) = a;
 
             // insert function ID to SymbolTable with data_type
-            (yyvsp[-3].symbol_info)->setDataType((yyvsp[-4].node)->token);
-            (yyvsp[-3].symbol_info)->token = "FUNCTION";
-            (yyvsp[-3].symbol_info)->isFunc = true;
+            (yyvsp[-3].symInfo)->setDataType((yyvsp[-4].node)->token);
+            (yyvsp[-3].symInfo)->token = "FUNCTION";
+            (yyvsp[-3].symInfo)->isFunc = true;
             
-            if(sym_tab->_insert(*(yyvsp[-3].symbol_info)))
+            if(sym_tab->_insert(*(yyvsp[-3].symInfo)))
             {
-                SymbolInfo* ret_symbol = sym_tab->_search((yyvsp[-3].symbol_info)->lexeme);
-                ret_symbol->isFuncDecl = true; // mark as function declaration
+                SymbolInfo* ret_symbol = sym_tab->_search((yyvsp[-3].symInfo)->lexeme);
+                ret_symbol->isFuncDecl = true;
             }
             else
             {
-                SymbolInfo* ret_symbol = sym_tab->_search((yyvsp[-3].symbol_info)->lexeme);
-                error_multiple_declaration((yyvsp[-3].symbol_info)->lexeme, ret_symbol->isFuncParam);
+                SymbolInfo* ret_symbol = sym_tab->_search((yyvsp[-3].symInfo)->lexeme);
+                mult_declaration_error((yyvsp[-3].symInfo)->lexeme, ret_symbol->isFuncParam);
             }
 
-            function_params.clear();
+            temp_param_list.clear();
         }
-#line 2010 "y.tab.c"
+#line 1988 "y.tab.c"
     break;
 
   case 14: /* func_declaration: type_specifier ID LPAREN error RPAREN SEMICOLON  */
-#line 584 "parser.y"
+#line 561 "parser.y"
                                                           { 
 
-                /**
-                    To handle errors like: 
-                        void foo(-);
-                **/
+                print_rule("func_declaration","type_specifier ID LPAREN RPAREN SEMICOLON");
 
-                print_grammar_rule("func_declaration","type_specifier ID LPAREN RPAREN SEMICOLON");
-
-                tnode *a = CreateTnode();
+                ptnode *a = getNewNode();
                 strcpy(a->token,"func_declaration");
-                a=ProgramNode((yyvsp[-5].node),a);
-                a=ProgramNode((yyvsp[-4].symbol_info),a);
-                a=ProgramNode("LPAREN", a);
-                a=ProgramNode("RPAREN", a);
-                a=ProgramNode("SEMICOLON", a);
+                a=makeChildNode((yyvsp[-5].node),a);
+                a=makeChildNode((yyvsp[-4].symInfo),a);
+                a=makeChildNode("LPAREN", a);
+                a=makeChildNode("RPAREN", a);
+                a=makeChildNode("SEMICOLON", a);
                 (yyval.node) = a;
 
-                // insert function ID to SymbolTable with data_type
-                (yyvsp[-4].symbol_info)->setDataType((yyvsp[-5].node)->token);
-                (yyvsp[-4].symbol_info)->token = "FUNCTION";
-                (yyvsp[-4].symbol_info)->isFunc = true;
+
+                (yyvsp[-4].symInfo)->setDataType((yyvsp[-5].node)->token);
+                (yyvsp[-4].symInfo)->token = "FUNCTION";
+                (yyvsp[-4].symInfo)->isFunc = true;
                 
-                if(sym_tab->_insert(*(yyvsp[-4].symbol_info)))
+                if(sym_tab->_insert(*(yyvsp[-4].symInfo)))
                 {
-                    SymbolInfo* ret_symbol = sym_tab->_search((yyvsp[-4].symbol_info)->lexeme);
-                    ret_symbol->isFuncDecl = true; // mark as function declaration
+                    SymbolInfo* ret_symbol = sym_tab->_search((yyvsp[-4].symInfo)->lexeme);
+                    ret_symbol->isFuncDecl = true;
                 }
                 else
                 {
-                    SymbolInfo* ret_symbol = sym_tab->_search((yyvsp[-4].symbol_info)->lexeme);
-                    error_multiple_declaration((yyvsp[-4].symbol_info)->lexeme, ret_symbol->isFuncParam);
+                    SymbolInfo* ret_symbol = sym_tab->_search((yyvsp[-4].symInfo)->lexeme);
+                    mult_declaration_error((yyvsp[-4].symInfo)->lexeme, ret_symbol->isFuncParam);
                 }
 
-                function_params.clear();
+                temp_param_list.clear();
             }
-#line 2051 "y.tab.c"
+#line 2024 "y.tab.c"
     break;
 
   case 15: /* func_declaration: type_specifier ID LPAREN error RPAREN error  */
-#line 620 "parser.y"
+#line 592 "parser.y"
                                                       { 
+                print_rule("func_declaration","type_specifier ID LPAREN RPAREN");
 
-                /**
-                    To handle errors like: 
-                        void foo(-)
-                **/
-
-                print_grammar_rule("func_declaration","type_specifier ID LPAREN RPAREN");
-
-                tnode *a = CreateTnode();
+                ptnode *a = getNewNode();
                 strcpy(a->token,"func_declaration");
-                a=ProgramNode((yyvsp[-5].node),a);
-                a=ProgramNode((yyvsp[-4].symbol_info),a);
-                a=ProgramNode("LPAREN", a);
-                a=ProgramNode("RPAREN", a);
+                a=makeChildNode((yyvsp[-5].node),a);
+                a=makeChildNode((yyvsp[-4].symInfo),a);
+                a=makeChildNode("LPAREN", a);
+                a=makeChildNode("RPAREN", a);
                 (yyval.node) = a;
 
-                // insert function ID to SymbolTable with data_type
-                (yyvsp[-4].symbol_info)->setDataType((yyvsp[-5].node)->token);
-                (yyvsp[-4].symbol_info)->token = "FUNCTION";
-                (yyvsp[-4].symbol_info)->isFunc = true;
+
+                (yyvsp[-4].symInfo)->setDataType((yyvsp[-5].node)->token);
+                (yyvsp[-4].symInfo)->token = "FUNCTION";
+                (yyvsp[-4].symInfo)->isFunc = true;
                 
-                if(sym_tab->_insert(*(yyvsp[-4].symbol_info)))
+                if(sym_tab->_insert(*(yyvsp[-4].symInfo)))
                 {
-                    SymbolInfo* ret_symbol = sym_tab->_search((yyvsp[-4].symbol_info)->lexeme);
-                    ret_symbol->isFuncDecl = true; // mark as function declaration
+                    SymbolInfo* ret_symbol = sym_tab->_search((yyvsp[-4].symInfo)->lexeme);
+                    ret_symbol->isFuncDecl = true;
                 }
                 else
                 {
-                    SymbolInfo* ret_symbol = sym_tab->_search((yyvsp[-4].symbol_info)->lexeme);
-                    error_multiple_declaration((yyvsp[-4].symbol_info)->lexeme, ret_symbol->isFuncParam);
+                    SymbolInfo* ret_symbol = sym_tab->_search((yyvsp[-4].symInfo)->lexeme);
+                    mult_declaration_error((yyvsp[-4].symInfo)->lexeme, ret_symbol->isFuncParam);
                 }
 
-                function_params.clear();
+                temp_param_list.clear();
             }
-#line 2091 "y.tab.c"
+#line 2058 "y.tab.c"
     break;
 
   case 16: /* $@1: %empty  */
-#line 658 "parser.y"
-                                                                { is_function_now = true;insert_function_to_global((yyvsp[-3].symbol_info),(yyvsp[-4].node)->token); }
-#line 2097 "y.tab.c"
+#line 624 "parser.y"
+                                                                { curr_ID_func = true;insert_to_symtable((yyvsp[-3].symInfo),(yyvsp[-4].node)->token); }
+#line 2064 "y.tab.c"
     break;
 
   case 17: /* func_definition: type_specifier ID LPAREN parameter_list RPAREN $@1 compound_statement  */
-#line 658 "parser.y"
-                                                                                                                                                       { 
-                print_grammar_rule("func_definition","type_specifier ID LPAREN parameter_list RPAREN compound_statement");
-                tnode *a = CreateTnode();
+#line 624 "parser.y"
+                                                                                                                                             { 
+                print_rule("func_definition","type_specifier ID LPAREN parameter_list RPAREN compound_statement");
+                ptnode *a = getNewNode();
                 strcpy(a->token,"func_definition");
-                a=ProgramNode((yyvsp[-6].node),a);
-                a=ProgramNode((yyvsp[-5].symbol_info),a);
-                a=ProgramNode("LPAREN",a);
-                a=ProgramNode((yyvsp[-3].node),a);
-                a=ProgramNode("RPAREN",a);
-                a=ProgramNode((yyvsp[0].node),a);
+                a=makeChildNode((yyvsp[-6].node),a);
+                a=makeChildNode((yyvsp[-5].symInfo),a);
+                a=makeChildNode("LPAREN",a);
+                a=makeChildNode((yyvsp[-3].node),a);
+                a=makeChildNode("RPAREN",a);
+                a=makeChildNode((yyvsp[0].node),a);
                 (yyval.node) = a;
 
-                // clear temp function params
-                is_function_now = false;
-                function_params.clear();
+
+                curr_ID_func = false;
+                temp_param_list.clear();
             }
-#line 2118 "y.tab.c"
+#line 2085 "y.tab.c"
     break;
 
   case 18: /* $@2: %empty  */
-#line 674 "parser.y"
-                                                               { is_function_now = true;insert_function_to_global((yyvsp[-4].symbol_info),(yyvsp[-5].node)->token); }
-#line 2124 "y.tab.c"
+#line 640 "parser.y"
+                                                               { curr_ID_func = true;insert_to_symtable((yyvsp[-4].symInfo),(yyvsp[-5].node)->token); }
+#line 2091 "y.tab.c"
     break;
 
   case 19: /* func_definition: type_specifier ID LPAREN parameter_list error RPAREN $@2 compound_statement  */
-#line 674 "parser.y"
-                                                                                                                                                      { 
-                
-                /**
-                    To handle cases like :
-                        void foo(int x-y){}
-                **/
-                
-                print_grammar_rule("func_definition","type_specifier ID LPAREN parameter_list RPAREN compound_statement");
+#line 640 "parser.y"
+                                                                                                                                            { 
+                print_rule("func_definition","type_specifier ID LPAREN parameter_list RPAREN compound_statement");
 
-                tnode *a = CreateTnode();
+                ptnode *a = getNewNode();
                 strcpy(a->token,"func_definition");
-                a=ProgramNode((yyvsp[-7].node),a);
-                a=ProgramNode((yyvsp[-6].symbol_info),a);
-                a=ProgramNode("LPAREN",a);
-                a=ProgramNode((yyvsp[-4].node),a);
-                a=ProgramNode("RPAREN",a);
-                a=ProgramNode((yyvsp[0].node),a);
+                a=makeChildNode((yyvsp[-7].node),a);
+                a=makeChildNode((yyvsp[-6].symInfo),a);
+                a=makeChildNode("LPAREN",a);
+                a=makeChildNode((yyvsp[-4].node),a);
+                a=makeChildNode("RPAREN",a);
+                a=makeChildNode((yyvsp[0].node),a);
                 (yyval.node) = a;
 
-                // clear temp function params
-                is_function_now = false;
-                function_params.clear();
+
+                curr_ID_func = false;
+                temp_param_list.clear();
         }
-#line 2152 "y.tab.c"
+#line 2113 "y.tab.c"
     break;
 
   case 20: /* $@3: %empty  */
-#line 697 "parser.y"
-                                                    {is_function_now = true;insert_function_to_global((yyvsp[-2].symbol_info),(yyvsp[-3].node)->token);}
-#line 2158 "y.tab.c"
+#line 657 "parser.y"
+                                                    {curr_ID_func = true;insert_to_symtable((yyvsp[-2].symInfo),(yyvsp[-3].node)->token);}
+#line 2119 "y.tab.c"
     break;
 
   case 21: /* func_definition: type_specifier ID LPAREN RPAREN $@3 compound_statement  */
-#line 697 "parser.y"
-                                                                                                                                         { 
-                print_grammar_rule("func_definition","type_specifier ID LPAREN RPAREN compound_statement");
+#line 657 "parser.y"
+                                                                                                                               { 
+                print_rule("func_definition","type_specifier ID LPAREN RPAREN compound_statement");
 
-                tnode *a = CreateTnode();
+                ptnode *a = getNewNode();
                 strcpy(a->token,"func_definition");
-                a=ProgramNode((yyvsp[-5].node),a);
-                a=ProgramNode((yyvsp[-4].symbol_info),a);
-                a=ProgramNode("LPAREN",a);
-                a=ProgramNode("RPAREN",a);
-                a=ProgramNode((yyvsp[0].node),a);
+                a=makeChildNode((yyvsp[-5].node),a);
+                a=makeChildNode((yyvsp[-4].symInfo),a);
+                a=makeChildNode("LPAREN",a);
+                a=makeChildNode("RPAREN",a);
+                a=makeChildNode((yyvsp[0].node),a);
                 (yyval.node) = a;
 
-                // clear temp function params
-                is_function_now = false;
-                function_params.clear();
+
+                curr_ID_func = false;
+                temp_param_list.clear();
             }
-#line 2179 "y.tab.c"
+#line 2140 "y.tab.c"
     break;
 
   case 22: /* $@4: %empty  */
-#line 713 "parser.y"
-                                                 { is_function_now = true;insert_function_to_global((yyvsp[-3].symbol_info),(yyvsp[-4].node)->token); }
-#line 2185 "y.tab.c"
+#line 673 "parser.y"
+                                                 { curr_ID_func = true;insert_to_symtable((yyvsp[-3].symInfo),(yyvsp[-4].node)->token); }
+#line 2146 "y.tab.c"
     break;
 
   case 23: /* func_definition: type_specifier ID LPAREN error RPAREN $@4 compound_statement  */
-#line 713 "parser.y"
-                                                                                                                                        {
-                
-                /**
-                    To handle cases like :
-                        void foo(-){}
-                **/
+#line 673 "parser.y"
+                                                                                                                              {
+                print_rule("func_definition","type_specifier ID LPAREN error RPAREN compound_statement");
 
-                print_grammar_rule("func_definition","type_specifier ID LPAREN error RPAREN compound_statement");
-
-                tnode *a = CreateTnode();
+                ptnode *a = getNewNode();
                 strcpy(a->token,"func_definition");
-                a=ProgramNode((yyvsp[-6].node),a);
-                a=ProgramNode((yyvsp[-5].symbol_info),a);
-                a=ProgramNode("LPAREN",a);
-                a=ProgramNode("RPAREN",a);
-                a=ProgramNode((yyvsp[0].node),a);
+                a=makeChildNode((yyvsp[-6].node),a);
+                a=makeChildNode((yyvsp[-5].symInfo),a);
+                a=makeChildNode("LPAREN",a);
+                a=makeChildNode("RPAREN",a);
+                a=makeChildNode((yyvsp[0].node),a);
                 (yyval.node) = a;
-                
-                // clear temp function params
-                is_function_now = false;
-                function_params.clear();
+
+                curr_ID_func = false;
+                temp_param_list.clear();
 
                 yyclearin;
                 yyerrok;
         }
-#line 2215 "y.tab.c"
+#line 2169 "y.tab.c"
     break;
 
   case 24: /* parameter_list: parameter_list COMMA type_specifier ID  */
-#line 741 "parser.y"
+#line 694 "parser.y"
                                                        {
-                print_grammar_rule("parameter_list","parameter_list COMMA type_specifier ID");
+                print_rule("parameter_list","parameter_list COMMA type_specifier ID");
 
-                tnode *a = CreateTnode();
+                ptnode *a = getNewNode();
                 strcpy(a->token,"parameter_list");
-                a=ProgramNode((yyvsp[-3].node),a);
-                a=ProgramNode("COMMA",a);
-                a=ProgramNode((yyvsp[-1].node),a);
-                a=ProgramNode((yyvsp[0].symbol_info),a);
+                a=makeChildNode((yyvsp[-3].node),a);
+                a=makeChildNode("COMMA",a);
+                a=makeChildNode((yyvsp[-1].node),a);
+                a=makeChildNode((yyvsp[0].symInfo),a);
                 (yyval.node) = a;
 
-                // insert parameter ID to SymbolTable with data_type
-                (yyvsp[0].symbol_info)->setDataType((yyvsp[-1].node)->valname);
-                (yyvsp[0].symbol_info)->token = (yyvsp[-1].node)->token;
-                (yyvsp[0].symbol_info)->isFuncParam = true;
-                function_params.push_back(*(yyvsp[0].symbol_info));
+
+                (yyvsp[0].symInfo)->setDataType((yyvsp[-1].node)->value);
+                (yyvsp[0].symInfo)->token = (yyvsp[-1].node)->token;
+                (yyvsp[0].symInfo)->isFuncParam = true;
+                temp_param_list.push_back(*(yyvsp[0].symInfo));
             }
-#line 2237 "y.tab.c"
+#line 2191 "y.tab.c"
     break;
 
   case 25: /* parameter_list: parameter_list error COMMA type_specifier ID  */
-#line 758 "parser.y"
+#line 711 "parser.y"
                                                        {
+            print_rule("parameter_list","parameter_list COMMA type_specifier ID");
+        
+            ptnode *a = getNewNode();
+            strcpy(a->token,"parameter_list");
+            a=makeChildNode((yyvsp[-4].node),a);
+            a=makeChildNode("COMMA",a);
+            a=makeChildNode((yyvsp[-1].node),a);
+            a=makeChildNode((yyvsp[0].symInfo),a);
+            (yyval.node) = a;
 
-                /**
-                    To handle errors like:
-                    void foo(int x-y,int z){}
-                **/
 
-               print_grammar_rule("parameter_list","parameter_list COMMA type_specifier ID");
-            
-                tnode *a = CreateTnode();
-                strcpy(a->token,"parameter_list");
-                a=ProgramNode((yyvsp[-4].node),a);
-                a=ProgramNode("COMMA",a);
-                a=ProgramNode((yyvsp[-1].node),a);
-                a=ProgramNode((yyvsp[0].symbol_info),a);
-                (yyval.node) = a;
-
-                // insert parameter ID to SymbolTable with data_type
-                (yyvsp[0].symbol_info)->setDataType((yyvsp[-1].node)->valname);
-                (yyvsp[0].symbol_info)->token = (yyvsp[-1].node)->token;
-                (yyvsp[0].symbol_info)->isFuncParam = true;
-                function_params.push_back(*(yyvsp[0].symbol_info));
+            (yyvsp[0].symInfo)->setDataType((yyvsp[-1].node)->value);
+            (yyvsp[0].symInfo)->token = (yyvsp[-1].node)->token;
+            (yyvsp[0].symInfo)->isFuncParam = true;
+            temp_param_list.push_back(*(yyvsp[0].symInfo));
         }
-#line 2265 "y.tab.c"
+#line 2213 "y.tab.c"
     break;
 
   case 26: /* parameter_list: parameter_list COMMA type_specifier  */
-#line 781 "parser.y"
+#line 728 "parser.y"
                                               {
-            print_grammar_rule("parameter_list","parameter_list COMMA type_specifier");
-            tnode *a = CreateTnode();
+            print_rule("parameter_list","parameter_list COMMA type_specifier");
+            ptnode *a = getNewNode();
             strcpy(a->token,"parameter_list");
-            a=ProgramNode((yyvsp[-2].node),a);
-            a=ProgramNode("COMMA",a);
-            a=ProgramNode((yyvsp[0].node),a);
+            a=makeChildNode((yyvsp[-2].node),a);
+            a=makeChildNode("COMMA",a);
+            a=makeChildNode((yyvsp[0].node),a);
             (yyval.node) = a;
 
-            SymbolInfo temp_s = SymbolInfo("dummy_key","dummy_value");
-            temp_s.data_type = (yyvsp[0].node)->valname;
-            temp_s.isFuncParam = true;
-            function_params.push_back(temp_s);
+            SymbolInfo sym = SymbolInfo("dummy_key","dummy_value");
+            sym.data_type = (yyvsp[0].node)->value;
+            sym.isFuncParam = true;
+            temp_param_list.push_back(sym);
         }
-#line 2284 "y.tab.c"
+#line 2232 "y.tab.c"
     break;
 
   case 27: /* parameter_list: parameter_list error COMMA type_specifier  */
-#line 795 "parser.y"
+#line 742 "parser.y"
                                                     {
+            print_rule("parameter_list","parameter_list COMMA type_specifier");
 
-            /**
-                To handle cases like:
-                    void foo(int x-y,int);
-            **/
-
-             print_grammar_rule("parameter_list","parameter_list COMMA type_specifier");
-
-            tnode *a = CreateTnode();
+            ptnode *a = getNewNode();
             strcpy(a->token,"parameter_list");
-            a=ProgramNode((yyvsp[-3].node),a);
-            a=ProgramNode("COMMA",a);
-            a=ProgramNode((yyvsp[0].node),a);
+            a=makeChildNode((yyvsp[-3].node),a);
+            a=makeChildNode("COMMA",a);
+            a=makeChildNode((yyvsp[0].node),a);
             (yyval.node) = a;
 
-            SymbolInfo temp_s = SymbolInfo("dummy_key","dummy_value");
-            temp_s.data_type = (yyvsp[0].node)->valname;
-            temp_s.isFuncParam = true;
-            function_params.push_back(temp_s);
+            SymbolInfo sym = SymbolInfo("dummy_key","dummy_value");
+            sym.data_type = (yyvsp[0].node)->value;
+            sym.isFuncParam = true;
+            temp_param_list.push_back(sym);
         }
-#line 2310 "y.tab.c"
+#line 2252 "y.tab.c"
     break;
 
   case 28: /* parameter_list: type_specifier ID  */
-#line 816 "parser.y"
+#line 757 "parser.y"
                                      { 
-                print_grammar_rule("parameter_list","type_specifier ID");
-                tnode *a = CreateTnode();
+                print_rule("parameter_list","type_specifier ID");
+                ptnode *a = getNewNode();
                 strcpy(a->token,"parameter_list");
-                a=ProgramNode((yyvsp[-1].node),a);
-                a=ProgramNode((yyvsp[0].symbol_info),a);
+                a=makeChildNode((yyvsp[-1].node),a);
+                a=makeChildNode((yyvsp[0].symInfo),a);
                 (yyval.node) = a;
 
-                // insert parameter ID to Parameter SymbolTable with data_type
-                (yyvsp[0].symbol_info)->setDataType((yyvsp[-1].node)->valname);
-                (yyvsp[0].symbol_info)->token = (yyvsp[-1].node)->token;
-                (yyvsp[0].symbol_info)->isFuncParam = true;
-                function_params.push_back(*(yyvsp[0].symbol_info));
+
+                (yyvsp[0].symInfo)->setDataType((yyvsp[-1].node)->value);
+                (yyvsp[0].symInfo)->token = (yyvsp[-1].node)->token;
+                (yyvsp[0].symInfo)->isFuncParam = true;
+                temp_param_list.push_back(*(yyvsp[0].symInfo));
         }
-#line 2329 "y.tab.c"
+#line 2271 "y.tab.c"
     break;
 
   case 29: /* parameter_list: type_specifier  */
-#line 830 "parser.y"
+#line 771 "parser.y"
                                  {
-            print_grammar_rule("parameter_list","type_specifier");
-            tnode *a = CreateTnode();
+            print_rule("parameter_list","type_specifier");
+            ptnode *a = getNewNode();
             strcpy(a->token,"parameter_list");
-            a=ProgramNode((yyvsp[0].node),a);
+            a=makeChildNode((yyvsp[0].node),a);
             (yyval.node) = a;
 
-            SymbolInfo temp_s = SymbolInfo("dummy_key","dummy_value");
-            temp_s.data_type = (yyvsp[0].node)->valname;
-            temp_s.isFuncParam = true;
-            function_params.push_back(temp_s);
+            SymbolInfo sym = SymbolInfo("dummy_key","dummy_value");
+            sym.data_type = (yyvsp[0].node)->value;
+            sym.isFuncParam = true;
+            temp_param_list.push_back(sym);
         }
-#line 2346 "y.tab.c"
+#line 2288 "y.tab.c"
     break;
 
   case 30: /* compound_statement: LCURL dummy_scope_function statements RCURL  */
-#line 844 "parser.y"
+#line 785 "parser.y"
                                                                 {
-                print_grammar_rule("compound_statement","LCURL statements RCURL");
+                print_rule("compound_statement","LCURL statements RCURL");
 
-                tnode *a = CreateTnode();
+                ptnode *a = getNewNode();
                 strcpy(a->token,"compound_statement");
-                a=ProgramNode("LCURL", a);
-                a=ProgramNode((yyvsp[-1].node), a);
-                a=ProgramNode("RCURL", a);
+                a=makeChildNode("LCURL", a);
+                a=makeChildNode((yyvsp[-1].node), a);
+                a=makeChildNode("RCURL", a);
                 (yyval.node) = a;
 
-                // EXIT
+
                 sym_tab->_print(logout,'A');
                 sym_tab->exitScope();
             }
-#line 2365 "y.tab.c"
+#line 2307 "y.tab.c"
     break;
 
   case 31: /* compound_statement: LCURL dummy_scope_function RCURL  */
-#line 858 "parser.y"
+#line 799 "parser.y"
                                                {
 
-                print_grammar_rule("compound_statement","LCURL RCURL");
+                print_rule("compound_statement","LCURL RCURL");
 
-                tnode *a = CreateTnode();
+                ptnode *a = getNewNode();
                 strcpy(a->token,"compound_statement");
-                a=ProgramNode("LCURL", a);
-                a=ProgramNode("RCURL", a);
+                a=makeChildNode("LCURL", a);
+                a=makeChildNode("RCURL", a);
                 (yyval.node) = a;
 
-                // EXIT
+
                 sym_tab->_print(logout,'A');
                 sym_tab->exitScope();
              }
-#line 2384 "y.tab.c"
+#line 2326 "y.tab.c"
     break;
 
   case 32: /* compound_statement: LCURL dummy_scope_function statements error RCURL  */
-#line 872 "parser.y"
+#line 813 "parser.y"
                                                                 {
-                print_grammar_rule("compound_statement","LCURL statements RCURL");
+                print_rule("compound_statement","LCURL statements RCURL");
 
-                tnode *a = CreateTnode();
+                ptnode *a = getNewNode();
                 strcpy(a->token,"compound_statement");
-                a=ProgramNode("LCURL", a);
-                a=ProgramNode((yyvsp[-2].node), a);
-                a=ProgramNode("RCURL", a);
+                a=makeChildNode("LCURL", a);
+                a=makeChildNode((yyvsp[-2].node), a);
+                a=makeChildNode("RCURL", a);
                 (yyval.node) = a;
 
-                 // EXIT
+ 
                 sym_tab->_print(logout,'A');
                 sym_tab->exitScope();
             }
-#line 2403 "y.tab.c"
+#line 2345 "y.tab.c"
     break;
 
   case 33: /* compound_statement: LCURL dummy_scope_function error statements RCURL  */
-#line 886 "parser.y"
+#line 827 "parser.y"
                                                                 {
-                print_grammar_rule("compound_statement","LCURL statements RCURL");
+                print_rule("compound_statement","LCURL statements RCURL");
 
-                tnode *a = CreateTnode();
+                ptnode *a = getNewNode();
                 strcpy(a->token,"compound_statement");
-                a=ProgramNode("LCURL", a);
-                a=ProgramNode((yyvsp[-1].node), a);
-                a=ProgramNode("RCURL", a);
+                a=makeChildNode("LCURL", a);
+                a=makeChildNode((yyvsp[-1].node), a);
+                a=makeChildNode("RCURL", a);
                 (yyval.node) = a;
 
-                // EXIT
+
                 sym_tab->_print(logout,'A');
                 sym_tab->exitScope();
             }
-#line 2422 "y.tab.c"
+#line 2364 "y.tab.c"
     break;
 
   case 34: /* compound_statement: LCURL dummy_scope_function error RCURL  */
-#line 900 "parser.y"
+#line 841 "parser.y"
                                                       {
                 
-                print_grammar_rule("compound_statement","LCURL error RCURL");
+                print_rule("compound_statement","LCURL error RCURL");
 
-                tnode *a = CreateTnode();
+                ptnode *a = getNewNode();
                 strcpy(a->token,"compound_statement");
-                a=ProgramNode("LCURL", a);
-                a=ProgramNode("RCURL", a);
+                a=makeChildNode("LCURL", a);
+                a=makeChildNode("RCURL", a);
                 (yyval.node) = a;
 
-                // EXIT
+
                 sym_tab->_print(logout,'A');
                 sym_tab->exitScope();
              }
-#line 2441 "y.tab.c"
+#line 2383 "y.tab.c"
     break;
 
   case 35: /* dummy_scope_function: %empty  */
-#line 915 "parser.y"
+#line 856 "parser.y"
                        {
 
                     sym_tab->enterScope(); 
 
-                    if(is_function_now)
+                    if(curr_ID_func)
                     {
-                        for(auto el:function_params)
+                        for(auto el:temp_param_list)
                         {
 
                             if(el.lexeme == "dummy_key") continue;
-                            // insert ID
-                            if(!sym_tab->_insert(el)) // already present in current scope
+                            if(!sym_tab->_insert(el))
                             {
-                                error_multiple_declaration(el.lexeme,el.isFuncParam);
+                                mult_declaration_error(el.lexeme,el.isFuncParam);
                             }
                         }
                     }
                 }
-#line 2464 "y.tab.c"
+#line 2405 "y.tab.c"
     break;
 
   case 36: /* var_declaration: type_specifier declaration_list SEMICOLON  */
-#line 935 "parser.y"
+#line 875 "parser.y"
                                                            { 
 
-            print_grammar_rule("var_declaration","type_specifier declaration_list SEMICOLON");
-            tnode *a = CreateTnode();
+            print_rule("var_declaration","type_specifier declaration_list SEMICOLON");
+            ptnode *a = getNewNode();
             strcpy(a->token,"var_declaration");
-            a=ProgramNode((yyvsp[-2].node),a);
-            a=ProgramNode((yyvsp[-1].node),a);
-            a=ProgramNode("SEMICOLON",a);
+            a=makeChildNode((yyvsp[-2].node),a);
+            a=makeChildNode((yyvsp[-1].node),a);
+            a=makeChildNode("SEMICOLON",a);
             (yyval.node) = a;
 
-            if(!strcmp((yyvsp[-2].node)->valname,"void")){
-                fprintf(errout, "Line# %d: Variable or field \'%s\' declared void\n", line_count, (((yyvsp[-1].node)->v[0])->lexeme).data());
+            if(!strcmp((yyvsp[-2].node)->value,"void")){
+                fprintf(errout, "Line# %d: Variable or field \'%s\' declared void\n", line_count, (((yyvsp[-1].node)->args_info_list[0])->lexeme).data());
                 err_count++;
             }
             else{
-                for(auto el:(yyvsp[-1].node)->v)
+                for(auto el:(yyvsp[-1].node)->args_info_list)
                 {
-                    if(el->data_type == "array") { el->setDataType(strcat((yyvsp[-2].node)->valname, "_array")) ; el->token = "ARRAY";}
-                    else { el->setDataType((yyvsp[-2].node)->valname); el->token = (yyvsp[-2].node)->token; }
+                    if(el->data_type == "array") { el->setDataType(strcat((yyvsp[-2].node)->value, "_array")) ; el->token = "ARRAY";}
+                    else { el->setDataType((yyvsp[-2].node)->value); el->token = (yyvsp[-2].node)->token; }
                     
                     if(el->token == "INT")  el->setDataType("int");
                     else if(el->token == "FLOAT")  el->setDataType("float");
 
-                    if(!sym_tab->_insert(*el)) // already present in current scope
+                    if(!sym_tab->_insert(*el))
                     {
-                        if(!strcmp(el->data_type.c_str(),(yyvsp[-2].node)->valname)) error_multiple_declaration(el->lexeme, el->isFuncParam);
-                        else error_type_mismatch(el->lexeme);
+                        if(!strcmp(el->data_type.c_str(),(yyvsp[-2].node)->value)) mult_declaration_error(el->lexeme, el->isFuncParam);
+                        else type_conflict_error(el->lexeme);
                     }
                 }
             }
         }
-#line 2500 "y.tab.c"
+#line 2441 "y.tab.c"
     break;
 
   case 37: /* var_declaration: type_specifier declaration_list error SEMICOLON  */
-#line 966 "parser.y"
-                                                          { 
+#line 906 "parser.y"
+                                                          {       
+            print_rule("var_declaration","type_specifier declaration_list SEMICOLON");
 
-            /**
-                To handle errors like :
-                    int x-y;
-                    int x[10]-y;
-                    int x[10.5]-y;
-            **/            
-
-            print_grammar_rule("var_declaration","type_specifier declaration_list SEMICOLON");
-
-            tnode *a = CreateTnode();
+            ptnode *a = getNewNode();
             strcpy(a->token,"var_declaration");
-            a=ProgramNode((yyvsp[-3].node),a);
-            a=ProgramNode((yyvsp[-2].node),a);
-            a=ProgramNode("SEMICOLON",a);
+            a=makeChildNode((yyvsp[-3].node),a);
+            a=makeChildNode((yyvsp[-2].node),a);
+            a=makeChildNode("SEMICOLON",a);
             (yyval.node) = a;
             
-            // insert all declaration_list ID to SymbolTable with data_type
-            for(auto el:(yyvsp[-2].node)->v)
+            for(auto el:(yyvsp[-2].node)->args_info_list)
             {
-                if(el->data_type == "array") {el->setDataType(strcat((yyvsp[-3].node)->valname,"_array")) ; el->token = "ARRAY";}
-                else {el->setDataType((yyvsp[-3].node)->valname); el->token = (yyvsp[-3].node)->valname;}
+                if(el->data_type == "array") {el->setDataType(strcat((yyvsp[-3].node)->value,"_array")) ; el->token = "ARRAY";}
+                else {el->setDataType((yyvsp[-3].node)->value); el->token = (yyvsp[-3].node)->value;}
                 
-                if(!sym_tab->_insert(*el)) // already present in current scope
+                if(!sym_tab->_insert(*el))
                 {
-                    if(!strcmp(el->data_type.c_str(),(yyvsp[-3].node)->valname)) error_multiple_declaration(el->lexeme, el->isFuncParam);
-                    else error_type_mismatch(el->lexeme);
+                    if(!strcmp(el->data_type.c_str(),(yyvsp[-3].node)->value)) mult_declaration_error(el->lexeme, el->isFuncParam);
+                    else type_conflict_error(el->lexeme);
                 }
 
             }
         }
-#line 2537 "y.tab.c"
+#line 2469 "y.tab.c"
     break;
 
   case 38: /* type_specifier: INT  */
-#line 1000 "parser.y"
+#line 931 "parser.y"
                      { 
-                    print_grammar_rule("type_specifier","INT"); 
+                    print_rule("type_specifier","INT"); 
 
-                    tnode *a = CreateTnode();
+                    ptnode *a = getNewNode();
                     strcpy(a->token,"type_specifier");
-                    a=ProgramNode((yyvsp[0].symbol_info),a);
+                    a=makeChildNode((yyvsp[0].symInfo),a);
                     (yyval.node) = a;
-                    strcpy((yyval.node)->valname,"int");
+                    strcpy((yyval.node)->value,"int");
                     strcpy((yyval.node)->token,"INT");
                 }
-#line 2552 "y.tab.c"
+#line 2484 "y.tab.c"
     break;
 
   case 39: /* type_specifier: FLOAT  */
-#line 1010 "parser.y"
+#line 941 "parser.y"
                         { 
-                    print_grammar_rule("type_specifier","FLOAT"); 
+                    print_rule("type_specifier","FLOAT"); 
 
-                    tnode *a = CreateTnode();
+                    ptnode *a = getNewNode();
                     strcpy(a->token,"type_specifier");
-                    a=ProgramNode((yyvsp[0].symbol_info),a);
+                    a=makeChildNode((yyvsp[0].symInfo),a);
                     (yyval.node) = a;
-                    strcpy((yyval.node)->valname,"float");
+                    strcpy((yyval.node)->value,"float");
                     strcpy((yyval.node)->token,"FLOAT");
                 }
-#line 2567 "y.tab.c"
+#line 2499 "y.tab.c"
     break;
 
   case 40: /* type_specifier: VOID  */
-#line 1020 "parser.y"
+#line 951 "parser.y"
                        { 
-                    print_grammar_rule("type_specifier","VOID"); 
-                    tnode *a = CreateTnode();
+                    print_rule("type_specifier","VOID"); 
+                    ptnode *a = getNewNode();
                     strcpy(a->token,"type_specifier");
-                    a=ProgramNode((yyvsp[0].symbol_info),a);
+                    a=makeChildNode((yyvsp[0].symInfo),a);
                     (yyval.node) = a;
-                    strcpy((yyval.node)->valname,"void");
+                    strcpy((yyval.node)->value,"void");
                     strcpy((yyval.node)->token,"VOID");
                 }
-#line 2581 "y.tab.c"
+#line 2513 "y.tab.c"
     break;
 
   case 41: /* declaration_list: declaration_list COMMA ID  */
-#line 1031 "parser.y"
+#line 962 "parser.y"
                                             { 
-                    print_grammar_rule("declaration_list","declaration_list COMMA ID");
+                    print_rule("declaration_list","declaration_list COMMA ID");
                     
-                    tnode *a = CreateTnode();
+                    ptnode *a = getNewNode();
                     strcpy(a->token,"declaration_list");
-                    a=ProgramNode((yyvsp[-2].node),a);
-                    a=ProgramNode("COMMA",a);
-                    a=ProgramNode((yyvsp[0].symbol_info),a);
+                    a=makeChildNode((yyvsp[-2].node),a);
+                    a=makeChildNode("COMMA",a);
+                    a=makeChildNode((yyvsp[0].symInfo),a);
                     (yyval.node) = a;
 
-                    // update type
-                    strcpy((yyval.node)->HelperType, (yyvsp[-2].node)->HelperType);
+                    
+                    strcpy((yyval.node)->resultType, (yyvsp[-2].node)->resultType);
 
-                    // init update vector
-                    (yyval.node)->v = (yyvsp[-2].node)->v;
-                    (yyval.node)->v.push_back((yyvsp[0].symbol_info));
+                    
+                    (yyval.node)->args_info_list= (yyvsp[-2].node)->args_info_list;
+                    (yyval.node)->args_info_list.push_back((yyvsp[0].symInfo));
             }
-#line 2603 "y.tab.c"
+#line 2535 "y.tab.c"
     break;
 
   case 42: /* declaration_list: declaration_list error COMMA ID  */
-#line 1048 "parser.y"
+#line 979 "parser.y"
                                               {
+                print_rule("declaration_list","declaration_list COMMA ID");
 
-                /**
-                To handle errors like :
-                    int x-y,z;
-                **/    
-
-                print_grammar_rule("declaration_list","declaration_list COMMA ID");
-
-                tnode *a = CreateTnode();
+                ptnode *a = getNewNode();
                 strcpy(a->token,"declaration_list");
-                a=ProgramNode((yyvsp[-3].node),a);
-                a=ProgramNode("COMMA",a);
-                a=ProgramNode((yyvsp[0].symbol_info),a);
+                a=makeChildNode((yyvsp[-3].node),a);
+                a=makeChildNode("COMMA",a);
+                a=makeChildNode((yyvsp[0].symInfo),a);
                 (yyval.node) = a;
 
-                // update type
-                strcpy((yyval.node)->HelperType, (yyvsp[-3].node)->HelperType);
+                
+                strcpy((yyval.node)->resultType, (yyvsp[-3].node)->resultType);
 
-                // init update vector
-                (yyval.node)->v = (yyvsp[-3].node)->v;
-                (yyval.node)->v.push_back((yyvsp[0].symbol_info));
+                
+                (yyval.node)->args_info_list= (yyvsp[-3].node)->args_info_list;
+                (yyval.node)->args_info_list.push_back((yyvsp[0].symInfo));
                 fprintf(errout, "Line# %d: Syntax error at declaration list of variable declaration\n", line_count);
                 err_count++;
             }
-#line 2633 "y.tab.c"
+#line 2559 "y.tab.c"
     break;
 
   case 43: /* declaration_list: declaration_list COMMA ID LTHIRD CONST_INT RTHIRD  */
-#line 1073 "parser.y"
+#line 998 "parser.y"
                                                                         {
-                print_grammar_rule("declaration_list","declaration_list COMMA ID LTHIRD CONST_INT RTHIRD");
+                print_rule("declaration_list","declaration_list COMMA ID LTHIRD CONST_INT RTHIRD");
 
-                tnode *a = CreateTnode();
+                ptnode *a = getNewNode();
                 strcpy(a->token,"declaration_list");
-                a=ProgramNode((yyvsp[-5].node),a);
-                a=ProgramNode("COMMA",a);
-                a=ProgramNode((yyvsp[-3].symbol_info),a);
-                a=ProgramNode("LTHIRD",a);
-                a=ProgramNode((yyvsp[-1].symbol_info),a);
-                a=ProgramNode("RTHIRD",a);
+                a=makeChildNode((yyvsp[-5].node),a);
+                a=makeChildNode("COMMA",a);
+                a=makeChildNode((yyvsp[-3].symInfo),a);
+                a=makeChildNode("LTHIRD",a);
+                a=makeChildNode((yyvsp[-1].symInfo),a);
+                a=makeChildNode("RTHIRD",a);
                 (yyval.node) = a;
 
-                // update type
-                strcpy((yyval.node)->HelperType, (yyvsp[-5].node)->HelperType);
+                
+                strcpy((yyval.node)->resultType, (yyvsp[-5].node)->resultType);
 
-                // init & update vector
-                (yyval.node)->v = (yyvsp[-5].node)->v;
-                (yyvsp[-3].symbol_info)->token ="ARRAY";
-                (yyvsp[-3].symbol_info)->data_type ="array";
-                (yyval.node)->v.push_back((yyvsp[-3].symbol_info));
+                
+                (yyval.node)->args_info_list= (yyvsp[-5].node)->args_info_list;
+                (yyvsp[-3].symInfo)->token ="ARRAY";
+                (yyvsp[-3].symInfo)->data_type ="array";
+                (yyval.node)->args_info_list.push_back((yyvsp[-3].symInfo));
            }
-#line 2660 "y.tab.c"
+#line 2586 "y.tab.c"
     break;
 
   case 44: /* declaration_list: declaration_list error COMMA ID LTHIRD CONST_INT RTHIRD  */
-#line 1095 "parser.y"
+#line 1020 "parser.y"
                                                                      {
+                print_rule("declaration_list","declaration_list COMMA ID LTHIRD CONST_INT RTHIRD");
 
-                /**
-                    To handle errors like :
-                        int x-y,z[10];
-                    **/  
-
-                print_grammar_rule("declaration_list","declaration_list COMMA ID LTHIRD CONST_INT RTHIRD");
-
-                tnode *a = CreateTnode();
+                ptnode *a = getNewNode();
                 strcpy(a->token,"declaration_list");
-                a=ProgramNode((yyvsp[-6].node),a);
-                a=ProgramNode("COMMA",a);
-                a=ProgramNode((yyvsp[-3].symbol_info),a);
-                a=ProgramNode("LTHIRD",a);
-                a=ProgramNode((yyvsp[-1].symbol_info),a);
-                a=ProgramNode("RTHIRD",a);
+                a=makeChildNode((yyvsp[-6].node),a);
+                a=makeChildNode("COMMA",a);
+                a=makeChildNode((yyvsp[-3].symInfo),a);
+                a=makeChildNode("LTHIRD",a);
+                a=makeChildNode((yyvsp[-1].symInfo),a);
+                a=makeChildNode("RTHIRD",a);
                 (yyval.node) = a;
 
-                // update type
-                strcpy((yyval.node)->HelperType, (yyvsp[-6].node)->HelperType);
+                
+                strcpy((yyval.node)->resultType, (yyvsp[-6].node)->resultType);
 
-                // init & update vector
-                (yyval.node)->v = (yyvsp[-6].node)->v;
-                (yyvsp[-3].symbol_info)->token ="ARRAY";
-                (yyvsp[-3].symbol_info)->data_type ="array";
-                (yyval.node)->v.push_back((yyvsp[-3].symbol_info));
+                
+                (yyval.node)->args_info_list= (yyvsp[-6].node)->args_info_list;
+                (yyvsp[-3].symInfo)->token ="ARRAY";
+                (yyvsp[-3].symInfo)->data_type ="array";
+                (yyval.node)->args_info_list.push_back((yyvsp[-3].symInfo));
            }
-#line 2693 "y.tab.c"
+#line 2613 "y.tab.c"
     break;
 
   case 45: /* declaration_list: declaration_list COMMA ID LTHIRD CONST_FLOAT RTHIRD  */
-#line 1123 "parser.y"
+#line 1042 "parser.y"
                                                                  {
+                print_rule("declaration_list","declaration_list COMMA ID LTHIRD CONST_FLOAT RTHIRD");
 
-                /***
-                    THIS IS AS EXTRA RULE ADDED TO CATCH ERROR
-                ***/
-
-                print_grammar_rule("declaration_list","declaration_list COMMA ID LTHIRD CONST_FLOAT RTHIRD");
-
-                tnode *a = CreateTnode();
+                ptnode *a = getNewNode();
                 strcpy(a->token,"declaration_list");
-                a=ProgramNode((yyvsp[-5].node),a);
-                a=ProgramNode("COMMA",a);
-                a=ProgramNode((yyvsp[-3].symbol_info),a);
-                a=ProgramNode("LTHIRD",a);
-                a=ProgramNode((yyvsp[-1].symbol_info),a);
-                a=ProgramNode("RTHIRD",a);
+                a=makeChildNode((yyvsp[-5].node),a);
+                a=makeChildNode("COMMA",a);
+                a=makeChildNode((yyvsp[-3].symInfo),a);
+                a=makeChildNode("LTHIRD",a);
+                a=makeChildNode((yyvsp[-1].symInfo),a);
+                a=makeChildNode("RTHIRD",a);
                 (yyval.node) = a;
 
-                // update type
-                strcpy((yyval.node)->HelperType, (yyvsp[-5].node)->HelperType);
+                
+                strcpy((yyval.node)->resultType, (yyvsp[-5].node)->resultType);
 
-                // int & update vector
-                (yyval.node)->v = (yyvsp[-5].node)->v;
-                (yyval.node)->v.push_back((yyvsp[-3].symbol_info));
+                
+                (yyval.node)->args_info_list= (yyvsp[-5].node)->args_info_list;
+                (yyval.node)->args_info_list.push_back((yyvsp[-3].symInfo));
 
                 fprintf(errout, "Line# %d: Non-integer Array Size\n", line_count);
                 err_count++;
             }
-#line 2726 "y.tab.c"
+#line 2641 "y.tab.c"
     break;
 
   case 46: /* declaration_list: declaration_list error COMMA ID LTHIRD CONST_FLOAT RTHIRD  */
-#line 1151 "parser.y"
+#line 1065 "parser.y"
                                                                         {
+                print_rule("declaration_list","declaration_list COMMA ID LTHIRD CONST_FLOAT RTHIRD");
 
-                    /***
-                        THIS IS AS EXTRA RULE ADDED TO CATCH ERROR
-                        
-                        Also,
-                        To handle errors like :
-                        int x-y,z[10.5];
-                    ***/
-
-                print_grammar_rule("declaration_list","declaration_list COMMA ID LTHIRD CONST_FLOAT RTHIRD");
-
-                tnode *a = CreateTnode();
+                ptnode *a = getNewNode();
                 strcpy(a->token,"declaration_list");
-                a=ProgramNode((yyvsp[-6].node),a);
-                a=ProgramNode("COMMA",a);
-                a=ProgramNode((yyvsp[-3].symbol_info),a);
-                a=ProgramNode("LTHIRD",a);
-                a=ProgramNode((yyvsp[-1].symbol_info),a);
-                a=ProgramNode("RTHIRD",a);
+                a=makeChildNode((yyvsp[-6].node),a);
+                a=makeChildNode("COMMA",a);
+                a=makeChildNode((yyvsp[-3].symInfo),a);
+                a=makeChildNode("LTHIRD",a);
+                a=makeChildNode((yyvsp[-1].symInfo),a);
+                a=makeChildNode("RTHIRD",a);
                 (yyval.node) = a;
 
-                // update type
-                strcpy((yyval.node)->HelperType, (yyvsp[-6].node)->HelperType);
+                
+                strcpy((yyval.node)->resultType, (yyvsp[-6].node)->resultType);
 
-                // int & update vector
-                (yyval.node)->v = (yyvsp[-6].node)->v;
-                (yyval.node)->v.push_back((yyvsp[-3].symbol_info));
+                
+                (yyval.node)->args_info_list= (yyvsp[-6].node)->args_info_list;
+                (yyval.node)->args_info_list.push_back((yyvsp[-3].symInfo));
 
                 fprintf(errout, "Line# %d: Non-integer Array Size\n", line_count);
                 err_count++;
             }
-#line 2763 "y.tab.c"
+#line 2669 "y.tab.c"
     break;
 
   case 47: /* declaration_list: ID  */
-#line 1183 "parser.y"
+#line 1088 "parser.y"
                          {     
-                    print_grammar_rule("declaration_list","ID");
+                    print_rule("declaration_list","ID");
 
-                    tnode *a = CreateTnode();
+                    ptnode *a = getNewNode();
                     strcpy(a->token,"declaration_list");
-                    a=ProgramNode((yyvsp[0].symbol_info),a);
+                    a=makeChildNode((yyvsp[0].symInfo),a);
                     (yyval.node) = a;
 
-                    // init vector
-                    (yyval.node)->v.push_back((yyvsp[0].symbol_info));
+                    
+                    (yyval.node)->args_info_list.push_back((yyvsp[0].symInfo));
             }
-#line 2779 "y.tab.c"
+#line 2685 "y.tab.c"
     break;
 
   case 48: /* declaration_list: ID LTHIRD CONST_INT RTHIRD  */
-#line 1194 "parser.y"
+#line 1099 "parser.y"
                                                  {
 
-                    print_grammar_rule("declaration_list","ID LTHIRD CONST_INT RTHIRD");
+                    print_rule("declaration_list","ID LTHIRD CONST_INT RTHIRD");
 
-                    tnode *a = CreateTnode();
+                    ptnode *a = getNewNode();
                     strcpy(a->token,"declaration_list");
-                    a=ProgramNode((yyvsp[-3].symbol_info),a);
-                    a=ProgramNode("LTHIRD",a);
-                    a=ProgramNode((yyvsp[-1].symbol_info),a);
-                    a=ProgramNode("RTHIRD",a);
+                    a=makeChildNode((yyvsp[-3].symInfo),a);
+                    a=makeChildNode("LTHIRD",a);
+                    a=makeChildNode((yyvsp[-1].symInfo),a);
+                    a=makeChildNode("RTHIRD",a);
                     (yyval.node) = a;
 
-                    // init vector
-                    (yyvsp[-3].symbol_info)->token = "ARRAY";
-                    (yyvsp[-3].symbol_info)->data_type ="array";
-                    (yyval.node)->v.push_back((yyvsp[-3].symbol_info));
+                    
+                    (yyvsp[-3].symInfo)->token = "ARRAY";
+                    (yyvsp[-3].symInfo)->data_type ="array";
+                    (yyval.node)->args_info_list.push_back((yyvsp[-3].symInfo));
             }
-#line 2801 "y.tab.c"
+#line 2707 "y.tab.c"
     break;
 
   case 49: /* declaration_list: ID LTHIRD CONST_FLOAT RTHIRD  */
-#line 1211 "parser.y"
+#line 1116 "parser.y"
                                            {
+                    print_rule("declaration_list","ID LTHIRD CONST_FLOAT RTHIRD");
 
-                    /***
-                        THIS IS AS EXTRA RULE ADDED TO CATCH ERROR
-                    ***/
-
-                    print_grammar_rule("declaration_list","ID LTHIRD CONST_FLOAT RTHIRD");
-
-                    tnode *a = CreateTnode();
+                    ptnode *a = getNewNode();
                     strcpy(a->token,"declaration_list");
-                    a=ProgramNode((yyvsp[-3].symbol_info),a);
-                    a=ProgramNode("LTHIRD",a);
-                    a=ProgramNode((yyvsp[-1].symbol_info),a);
-                    a=ProgramNode("RTHIRD",a);
+                    a=makeChildNode((yyvsp[-3].symInfo),a);
+                    a=makeChildNode("LTHIRD",a);
+                    a=makeChildNode((yyvsp[-1].symInfo),a);
+                    a=makeChildNode("RTHIRD",a);
                     (yyval.node) = a;
 
-                    // init vector
-                    (yyval.node)->v.push_back((yyvsp[-3].symbol_info));
+                    
+                    (yyval.node)->args_info_list.push_back((yyvsp[-3].symInfo));
 
                     fprintf(errout, "Line# %d: Non-integer Array Size\n", line_count);
                     err_count++;
            }
-#line 2828 "y.tab.c"
+#line 2729 "y.tab.c"
     break;
 
   case 50: /* statements: statement  */
-#line 1235 "parser.y"
+#line 1135 "parser.y"
                       {
-            print_grammar_rule("statements","statement");
-            tnode *a = CreateTnode();
+            print_rule("statements","statement");
+            ptnode *a = getNewNode();
             strcpy(a->token,"statements");
-            a=ProgramNode((yyvsp[0].node),a);
+            a=makeChildNode((yyvsp[0].node),a);
             (yyval.node) = a;
             
         }
-#line 2841 "y.tab.c"
+#line 2742 "y.tab.c"
     break;
 
   case 51: /* statements: statements statement  */
-#line 1243 "parser.y"
+#line 1143 "parser.y"
                                   {
-            print_grammar_rule("statements","statements statement");
+            print_rule("statements","statements statement");
         
-            tnode *a = CreateTnode();
+            ptnode *a = getNewNode();
             strcpy(a->token,"statements");
-            a=ProgramNode((yyvsp[-1].node),a);
-            a=ProgramNode((yyvsp[0].node),a);
+            a=makeChildNode((yyvsp[-1].node),a);
+            a=makeChildNode((yyvsp[0].node),a);
             (yyval.node) = a;
         }
-#line 2855 "y.tab.c"
+#line 2756 "y.tab.c"
     break;
 
   case 52: /* statements: statements error statement  */
-#line 1252 "parser.y"
+#line 1152 "parser.y"
                                      {
-            print_grammar_rule("statements","statements statement");
+            print_rule("statements","statements statement");
         
-            tnode *a = CreateTnode();
+            ptnode *a = getNewNode();
             strcpy(a->token,"statements");
-            a=ProgramNode((yyvsp[-2].node),a);
-            a=ProgramNode((yyvsp[0].node),a);
+            a=makeChildNode((yyvsp[-2].node),a);
+            a=makeChildNode((yyvsp[0].node),a);
             (yyval.node) = a;
         }
-#line 2869 "y.tab.c"
+#line 2770 "y.tab.c"
     break;
 
   case 53: /* statement: var_declaration  */
-#line 1264 "parser.y"
+#line 1164 "parser.y"
                            {
-            print_grammar_rule("statement","var_declaration");
+            print_rule("statement","var_declaration");
 
-            tnode *a = CreateTnode();
+            ptnode *a = getNewNode();
             strcpy(a->token,"statement");
-            a=ProgramNode((yyvsp[0].node),a);
+            a=makeChildNode((yyvsp[0].node),a);
             (yyval.node) = a;
         }
-#line 2882 "y.tab.c"
+#line 2783 "y.tab.c"
     break;
 
   case 54: /* statement: func_definition  */
-#line 1272 "parser.y"
+#line 1172 "parser.y"
                         {
-            print_grammar_rule("statement","func_definition");
+            print_rule("statement","func_definition");
 
-            tnode *a = CreateTnode();
+            ptnode *a = getNewNode();
             strcpy(a->token,"statement");
-            a=ProgramNode((yyvsp[0].node),a);
+            a=makeChildNode((yyvsp[0].node),a);
             (yyval.node) = a;
 
             fprintf(errout, "Line# %d: A function cannot be defined inside another function\n", line_count);
             err_count++;
       }
-#line 2898 "y.tab.c"
+#line 2799 "y.tab.c"
     break;
 
   case 55: /* statement: func_declaration  */
-#line 1283 "parser.y"
+#line 1183 "parser.y"
                          {
-            print_grammar_rule("statement","func_declaration");
-            tnode *a = CreateTnode();
+            print_rule("statement","func_declaration");
+            ptnode *a = getNewNode();
             strcpy(a->token,"statement");
-            a=ProgramNode((yyvsp[0].node),a);
+            a=makeChildNode((yyvsp[0].node),a);
             (yyval.node) = a;
 
             fprintf(errout, "Line# %d: A function cannot be defined inside another function\n", line_count);
             err_count++;
       }
-#line 2913 "y.tab.c"
+#line 2814 "y.tab.c"
     break;
 
   case 56: /* statement: expression_statement  */
-#line 1293 "parser.y"
+#line 1193 "parser.y"
                                  {
-            print_grammar_rule("statement","expression_statement");
-            tnode *a = CreateTnode();
+            print_rule("statement","expression_statement");
+            ptnode *a = getNewNode();
             strcpy(a->token,"statement");
-            a=ProgramNode((yyvsp[0].node),a);
+            a=makeChildNode((yyvsp[0].node),a);
             (yyval.node) = a;
         }
-#line 2925 "y.tab.c"
+#line 2826 "y.tab.c"
     break;
 
   case 57: /* statement: compound_statement  */
-#line 1300 "parser.y"
+#line 1200 "parser.y"
                                {
-            print_grammar_rule("statement","compound_statement");
-            tnode *a = CreateTnode();
+            print_rule("statement","compound_statement");
+            ptnode *a = getNewNode();
             strcpy(a->token,"statement");
-            a=ProgramNode((yyvsp[0].node),a);
+            a=makeChildNode((yyvsp[0].node),a);
             (yyval.node) = a;
         }
-#line 2937 "y.tab.c"
+#line 2838 "y.tab.c"
     break;
 
   case 58: /* statement: FOR LPAREN expression_statement expression_statement expression RPAREN statement  */
-#line 1307 "parser.y"
+#line 1207 "parser.y"
                                                                                              {
-            print_grammar_rule("statement","FOR LPAREN expression_statement expression_statement expression RPAREN statement");
-            tnode *a = CreateTnode();
+            print_rule("statement","FOR LPAREN expression_statement expression_statement expression RPAREN statement");
+            ptnode *a = getNewNode();
             strcpy(a->token,"statement");
-            a=ProgramNode((yyvsp[-6].string), "FOR", a);
-            a=ProgramNode("LPAREN", a);
-            a=ProgramNode((yyvsp[-4].node), a);
-            a=ProgramNode((yyvsp[-3].node), a);
-            a=ProgramNode((yyvsp[-2].node), a);
-            a=ProgramNode("RPAREN", a);
-            a=ProgramNode((yyvsp[0].node), a);
+            a=makeChildNode((yyvsp[-6].string), "FOR", a);
+            a=makeChildNode("LPAREN", a);
+            a=makeChildNode((yyvsp[-4].node), a);
+            a=makeChildNode((yyvsp[-3].node), a);
+            a=makeChildNode((yyvsp[-2].node), a);
+            a=makeChildNode("RPAREN", a);
+            a=makeChildNode((yyvsp[0].node), a);
             (yyval.node) = a;
         }
-#line 2955 "y.tab.c"
+#line 2856 "y.tab.c"
     break;
 
   case 59: /* statement: IF LPAREN expression RPAREN statement  */
-#line 1320 "parser.y"
+#line 1220 "parser.y"
                                                                         { 
-            print_grammar_rule("statement","IF LPAREN expression RPAREN statement");
-            tnode *a = CreateTnode();
+            print_rule("statement","IF LPAREN expression RPAREN statement");
+            ptnode *a = getNewNode();
             strcpy(a->token,"statement");
-            a=ProgramNode((yyvsp[-4].string), "IF",a);
-            a=ProgramNode("LPAREN",a);
-            a=ProgramNode((yyvsp[-2].node),a);
-            a=ProgramNode("RPAREN",a);
-            a=ProgramNode((yyvsp[0].node),a);
+            a=makeChildNode((yyvsp[-4].string), "IF",a);
+            a=makeChildNode("LPAREN",a);
+            a=makeChildNode((yyvsp[-2].node),a);
+            a=makeChildNode("RPAREN",a);
+            a=makeChildNode((yyvsp[0].node),a);
             (yyval.node) = a;
         }
-#line 2971 "y.tab.c"
+#line 2872 "y.tab.c"
     break;
 
   case 60: /* statement: IF LPAREN expression RPAREN statement ELSE statement  */
-#line 1331 "parser.y"
+#line 1231 "parser.y"
                                                                  {
 
-            print_grammar_rule("statement","IF LPAREN expression RPAREN statement ELSE statement");
-            tnode *a = CreateTnode();
+            print_rule("statement","IF LPAREN expression RPAREN statement ELSE statement");
+            ptnode *a = getNewNode();
             strcpy(a->token,"statement");
-            a=ProgramNode((yyvsp[-6].string), "IF",a);
-            a=ProgramNode("LPAREN",a);
-            a=ProgramNode((yyvsp[-4].node),a);
-            a=ProgramNode("RPAREN",a);
-            a=ProgramNode((yyvsp[-6].string), "ELSE",a);
-            a=ProgramNode((yyvsp[-2].node),a);
+            a=makeChildNode((yyvsp[-6].string), "IF",a);
+            a=makeChildNode("LPAREN",a);
+            a=makeChildNode((yyvsp[-4].node),a);
+            a=makeChildNode("RPAREN",a);
+            a=makeChildNode((yyvsp[-6].string), "ELSE",a);
+            a=makeChildNode((yyvsp[-2].node),a);
             (yyval.node) = a;
         
         }
-#line 2990 "y.tab.c"
+#line 2891 "y.tab.c"
     break;
 
   case 61: /* statement: WHILE LPAREN expression RPAREN statement  */
-#line 1345 "parser.y"
+#line 1245 "parser.y"
                                                      {
-            print_grammar_rule("statement","WHILE LPAREN expression RPAREN statement");
-            tnode *a = CreateTnode();
+            print_rule("statement","WHILE LPAREN expression RPAREN statement");
+            ptnode *a = getNewNode();
             strcpy(a->token,"statement");
-            a=ProgramNode((yyvsp[-4].string),"WHILE",a);
+            a=makeChildNode((yyvsp[-4].string),"WHILE",a);
             (yyval.node) = a;
         }
-#line 3002 "y.tab.c"
+#line 2903 "y.tab.c"
     break;
 
   case 62: /* statement: PRINTLN LPAREN ID RPAREN SEMICOLON  */
-#line 1352 "parser.y"
+#line 1252 "parser.y"
                                                {
-            print_grammar_rule("statement","PRINTLN LPAREN ID RPAREN SEMICOLON");
+            print_rule("statement","PRINTLN LPAREN ID RPAREN SEMICOLON");
 
-            tnode *a = CreateTnode();
+            ptnode *a = getNewNode();
             strcpy(a->token,"statement");
-            a=ProgramNode((yyvsp[-4].string),"PRINTLN",a);
-            a=ProgramNode("LPAREN",a);
-            a=ProgramNode((yyvsp[-2].symbol_info),a);
-            a=ProgramNode("RPAREN",a);
-            a=ProgramNode("SEMICOLON",a);
+            a=makeChildNode((yyvsp[-4].string),"PRINTLN",a);
+            a=makeChildNode("LPAREN",a);
+            a=makeChildNode((yyvsp[-2].symInfo),a);
+            a=makeChildNode("RPAREN",a);
+            a=makeChildNode("SEMICOLON",a);
             (yyval.node) = a;
 
-            // check error
-            SymbolInfo* ret_symbol = sym_tab->_search((yyvsp[-2].symbol_info)->lexeme);
+
+            SymbolInfo* ret_symbol = sym_tab->_search((yyvsp[-2].symInfo)->lexeme);
 
             if(ret_symbol == NULL)
             {
-                fprintf(errout, "Line# %d: Undeclared variable \'%s\'\n", line_count, ((yyvsp[-2].symbol_info)->lexeme).data());
+                fprintf(errout, "Line# %d: Undeclared variable \'%s\'\n", line_count, ((yyvsp[-2].symInfo)->lexeme).data());
                 err_count++;
-                strcpy((yyval.node)->HelperType,"NULL");
+                strcpy((yyval.node)->resultType,"NULL");
             }
             
         }
-#line 3030 "y.tab.c"
+#line 2931 "y.tab.c"
     break;
 
   case 63: /* statement: RETURN expression SEMICOLON  */
-#line 1375 "parser.y"
+#line 1275 "parser.y"
                                         {
-            print_grammar_rule("statement","RETURN expression SEMICOLON");
-            tnode *a = CreateTnode();
+            print_rule("statement","RETURN expression SEMICOLON");
+            ptnode *a = getNewNode();
             strcpy(a->token,"statement");
-            a=ProgramNode("RETURN",a);
-            a=ProgramNode((yyvsp[-1].node),a);
-            a=ProgramNode("SEMICOLON",a);
+            a=makeChildNode("RETURN",a);
+            a=makeChildNode((yyvsp[-1].node),a);
+            a=makeChildNode("SEMICOLON",a);
             (yyval.node) = a;
         }
-#line 3044 "y.tab.c"
+#line 2945 "y.tab.c"
     break;
 
   case 64: /* expression_statement: SEMICOLON  */
-#line 1386 "parser.y"
+#line 1286 "parser.y"
                                 {
-                    print_grammar_rule("expression_statement","SEMICOLON");
-                    tnode *a = CreateTnode();
+                    print_rule("expression_statement","SEMICOLON");
+                    ptnode *a = getNewNode();
                     strcpy(a->token,"expression_statement");
-                    a=ProgramNode("SEMICOLON",a);
+                    a=makeChildNode("SEMICOLON",a);
                     (yyval.node) = a;
                 }
-#line 3056 "y.tab.c"
+#line 2957 "y.tab.c"
     break;
 
   case 65: /* expression_statement: expression SEMICOLON  */
-#line 1393 "parser.y"
+#line 1293 "parser.y"
                                                {
-                    print_grammar_rule("expression_statement","expression SEMICOLON");
-                    tnode *a = CreateTnode();
+                    print_rule("expression_statement","expression SEMICOLON");
+                    ptnode *a = getNewNode();
                     strcpy(a->token,"expression_statement");
-                    a=ProgramNode((yyvsp[-1].node),a);
-                    a=ProgramNode("SEMICOLON",a);
+                    a=makeChildNode((yyvsp[-1].node),a);
+                    a=makeChildNode("SEMICOLON",a);
                     (yyval.node) = a;
                 }
-#line 3069 "y.tab.c"
+#line 2970 "y.tab.c"
     break;
 
   case 66: /* variable: ID  */
-#line 1403 "parser.y"
+#line 1303 "parser.y"
              { 
-            print_grammar_rule("variable","ID");
+            print_rule("variable","ID");
 
-            tnode *a = CreateTnode();
+            ptnode *a = getNewNode();
             strcpy(a->token,"variable");
-            a=ProgramNode((yyvsp[0].symbol_info),a);
+            a=makeChildNode((yyvsp[0].symInfo),a);
             (yyval.node) = a;
 
-            // check error
-            SymbolInfo* ret_symbol = sym_tab->_search((yyvsp[0].symbol_info)->lexeme);
+
+            SymbolInfo* ret_symbol = sym_tab->_search((yyvsp[0].symInfo)->lexeme);
 
             if(ret_symbol == NULL)
             {
-                fprintf(errout, "Line# %d: Undeclared variable \'%s\'\n", line_count, ((yyvsp[0].symbol_info)->lexeme).data());
+                fprintf(errout, "Line# %d: Undeclared variable \'%s\'\n", line_count, ((yyvsp[0].symInfo)->lexeme).data());
                 err_count++;
-                strcpy((yyval.node)->HelperType, "NULL");
+                strcpy((yyval.node)->resultType, "NULL");
             }
             else
             {
                 if(ret_symbol->data_type == "int_array" || ret_symbol->data_type == "float_array")
                 {
-                    error_type_mismatch(ret_symbol->lexeme);
-                    strcpy((yyval.node)->HelperType, "NULL");
+                    type_conflict_error(ret_symbol->lexeme);
+                    strcpy((yyval.node)->resultType, "NULL");
                 }
                 else{
-                    strcpy((yyval.node)->HelperType, ret_symbol->data_type.c_str());
+                    strcpy((yyval.node)->resultType, ret_symbol->data_type.c_str());
                 }
             }
 
         }
-#line 3104 "y.tab.c"
+#line 3005 "y.tab.c"
     break;
 
   case 67: /* variable: ID LTHIRD expression RTHIRD  */
-#line 1433 "parser.y"
+#line 1333 "parser.y"
                                        {
-            print_grammar_rule("variable","ID LTHIRD expression RTHIRD");
+            print_rule("variable","ID LTHIRD expression RTHIRD");
 
-            tnode *a = CreateTnode();
+            ptnode *a = getNewNode();
             strcpy(a->token,"variable");
-            a=ProgramNode((yyvsp[-3].symbol_info),a);
-            a=ProgramNode("LTHIRD",a);
-            a=ProgramNode((yyvsp[-1].node),a);
-            a=ProgramNode("RTHIRD",a);
+            a=makeChildNode((yyvsp[-3].symInfo),a);
+            a=makeChildNode("LTHIRD",a);
+            a=makeChildNode((yyvsp[-1].node),a);
+            a=makeChildNode("RTHIRD",a);
             (yyval.node) = a;
 
-            // check error
-            SymbolInfo* ret_symbol = sym_tab->_search((yyvsp[-3].symbol_info)->lexeme);
+
+            SymbolInfo* ret_symbol = sym_tab->_search((yyvsp[-3].symInfo)->lexeme);
 
             if(ret_symbol == NULL)
             {
-                fprintf(errout, "Line# %d: Undeclared variable \'%s\'\n", line_count, ((yyvsp[-3].symbol_info)->lexeme).data());
+                fprintf(errout, "Line# %d: Undeclared variable \'%s\'\n", line_count, ((yyvsp[-3].symInfo)->lexeme).data());
                 err_count++;
-                strcpy((yyval.node)->HelperType, "NULL");
+                strcpy((yyval.node)->resultType, "NULL");
             }
             else
             {
@@ -3131,269 +3032,269 @@ yyreduce:
                 {
                     fprintf(errout, "Line# %d: \'%s\' is not an array\n", line_count, (ret_symbol->lexeme).data());
                     err_count++;
-                    strcpy((yyval.node)->HelperType, "NULL");
+                    strcpy((yyval.node)->resultType, "NULL");
                 }
                 else{
-                    strcpy((yyval.node)->HelperType, ret_symbol->data_type.c_str());
+                    strcpy((yyval.node)->resultType, ret_symbol->data_type.c_str());
                 }
             }
 
-            if(strcmp((yyvsp[-1].node)->HelperType, "int"))
+            if(strcmp((yyvsp[-1].node)->resultType, "int"))
             {
                 fprintf(errout, "Line# %d: Array subscript is not an integer\n", line_count);
                 err_count++;
             }
          }
-#line 3148 "y.tab.c"
+#line 3049 "y.tab.c"
     break;
 
   case 68: /* expression: logic_expression  */
-#line 1474 "parser.y"
+#line 1374 "parser.y"
                                 {
-                print_grammar_rule("expression","logic_expression");
-                tnode *a = CreateTnode();
+                print_rule("expression","logic_expression");
+                ptnode *a = getNewNode();
                 strcpy(a->token,"expression");
-                a=ProgramNode((yyvsp[0].node),a);
+                a=makeChildNode((yyvsp[0].node),a);
                 (yyval.node) = a;
 
-                // update vector : push up
-                strcpy((yyval.node)->HelperType, (yyvsp[0].node)->HelperType);
+
+                strcpy((yyval.node)->resultType, (yyvsp[0].node)->resultType);
             }
-#line 3163 "y.tab.c"
+#line 3064 "y.tab.c"
     break;
 
   case 69: /* expression: variable ASSIGNOP logic_expression  */
-#line 1484 "parser.y"
+#line 1384 "parser.y"
                                                 {
-                print_grammar_rule("expression","variable ASSIGNOP logic_expression");
+                print_rule("expression","variable ASSIGNOP logic_expression");
 
-                tnode *a = CreateTnode();
+                ptnode *a = getNewNode();
                 strcpy(a->token,"expression");
-                a=ProgramNode((yyvsp[-2].node),a);
-                a=ProgramNode("ASSIGNOP",a);
-                a=ProgramNode((yyvsp[0].node),a);
+                a=makeChildNode((yyvsp[-2].node),a);
+                a=makeChildNode("ASSIGNOP",a);
+                a=makeChildNode((yyvsp[0].node),a);
                 (yyval.node) = a;
 
-                if(!check_assignop((yyvsp[-2].node)->HelperType,(yyvsp[0].node)->HelperType))
+                if(!is_assignment_valid((yyvsp[-2].node)->resultType,(yyvsp[0].node)->resultType))
                 {
-                    if(strcmp((yyvsp[-2].node)->HelperType,"void")==0 || strcmp((yyvsp[0].node)->HelperType,"void")==0)
+                    if(strcmp((yyvsp[-2].node)->resultType,"void")==0 || strcmp((yyvsp[0].node)->resultType,"void")==0)
                     {
-                        error_type_cast_void();
+                        void_expression_error();
                     }
-                    else if((!strcmp((yyvsp[-2].node)->HelperType,"int") || !strcmp((yyvsp[-2].node)->HelperType,"int_array")) && 
-                            (!strcmp((yyvsp[0].node)->HelperType,"float") || !strcmp((yyvsp[0].node)->HelperType,"float_array")))
+                    else if((!strcmp((yyvsp[-2].node)->resultType,"int") || !strcmp((yyvsp[-2].node)->resultType,"int_array")) && 
+                            (!strcmp((yyvsp[0].node)->resultType,"float") || !strcmp((yyvsp[0].node)->resultType,"float_array")))
                     {
                         fprintf(errout, "Line# %d: Warning: possible loss of data in assignment of FLOAT to INT\n", line_count);
                         err_count++;
                     }
                 }
             }
-#line 3192 "y.tab.c"
+#line 3093 "y.tab.c"
     break;
 
   case 70: /* logic_expression: rel_expression  */
-#line 1512 "parser.y"
+#line 1412 "parser.y"
                                  {
-                print_grammar_rule("logic_expression","rel_expression"); 
-                tnode *a = CreateTnode();
+                print_rule("logic_expression","rel_expression"); 
+                ptnode *a = getNewNode();
                 strcpy(a->token,"logic_expression");
-                a=ProgramNode((yyvsp[0].node),a);
+                a=makeChildNode((yyvsp[0].node),a);
                 (yyval.node) = a;
 
-                // update vector : push up
-                strcpy((yyval.node)->HelperType, (yyvsp[0].node)->HelperType);
+
+                strcpy((yyval.node)->resultType, (yyvsp[0].node)->resultType);
             }
-#line 3207 "y.tab.c"
+#line 3108 "y.tab.c"
     break;
 
   case 71: /* logic_expression: rel_expression LOGICOP rel_expression  */
-#line 1522 "parser.y"
+#line 1422 "parser.y"
                                                          {
-                print_grammar_rule("logic_expression","rel_expression LOGICOP rel_expression");
+                print_rule("logic_expression","rel_expression LOGICOP rel_expression");
 
-                tnode *a = CreateTnode();
+                ptnode *a = getNewNode();
                 strcpy(a->token,"logic_expression");
-                a=ProgramNode((yyvsp[-2].node),a);
-                a=ProgramNode((yyvsp[-1].symbol_info),a);
-                a=ProgramNode((yyvsp[0].node),a);
+                a=makeChildNode((yyvsp[-2].node),a);
+                a=makeChildNode((yyvsp[-1].symInfo),a);
+                a=makeChildNode((yyvsp[0].node),a);
                 (yyval.node) = a;
 
-                // do implicit typecast
-                string typecast_ret = do_implicit_typecast((yyvsp[-2].node)->HelperType,(yyvsp[0].node)->HelperType);
+
+                string typecast_ret = typecast((yyvsp[-2].node)->resultType,(yyvsp[0].node)->resultType);
 
                 if(typecast_ret != "NULL")
                 {
-                    if(typecast_ret != "error") strcpy((yyval.node)->HelperType,"int"); // ALWAYS INT
+                    if(typecast_ret != "error") strcpy((yyval.node)->resultType,"int");
                     else {
 
-                        if(!strcmp((yyvsp[-2].node)->HelperType, "void") || !strcmp((yyvsp[0].node)->HelperType, "void"))
+                        if(!strcmp((yyvsp[-2].node)->resultType, "void") || !strcmp((yyvsp[0].node)->resultType, "void"))
                         {
-                            error_type_cast_void();
+                            void_expression_error();
                         }
                         else
                         {
-                            error_type_cast();
+                            typecast_error();
                         }
 
-                        strcpy((yyval.node)->HelperType, "NULL");
+                        strcpy((yyval.node)->resultType, "NULL");
                     }
                 }
                 else
                 {
-                    strcpy((yyval.node)->HelperType, "NULL");
+                    strcpy((yyval.node)->resultType, "NULL");
                 }
             }
-#line 3247 "y.tab.c"
+#line 3148 "y.tab.c"
     break;
 
   case 72: /* rel_expression: simple_expression  */
-#line 1559 "parser.y"
+#line 1459 "parser.y"
                                   {
-                print_grammar_rule("rel_expression","simple_expression");
-                tnode *a = CreateTnode();
+                print_rule("rel_expression","simple_expression");
+                ptnode *a = getNewNode();
                 strcpy(a->token,"rel_expression");
-                a=ProgramNode((yyvsp[0].node),a);
+                a=makeChildNode((yyvsp[0].node),a);
                 (yyval.node) = a;
 
-                // update vector : push up
-                strcpy((yyval.node)->HelperType, (yyvsp[0].node)->HelperType);
+
+                strcpy((yyval.node)->resultType, (yyvsp[0].node)->resultType);
             }
-#line 3262 "y.tab.c"
+#line 3163 "y.tab.c"
     break;
 
   case 73: /* rel_expression: simple_expression RELOP simple_expression  */
-#line 1569 "parser.y"
+#line 1469 "parser.y"
                                                                 {
-                print_grammar_rule("rel_expression","simple_expression RELOP simple_expression");
+                print_rule("rel_expression","simple_expression RELOP simple_expression");
 
-                tnode *a = CreateTnode();
+                ptnode *a = getNewNode();
                 strcpy(a->token,"rel_expression");
-                a=ProgramNode((yyvsp[-2].node),a);
-                a=ProgramNode((yyvsp[-1].symbol_info),a);
-                a=ProgramNode((yyvsp[0].node),a);
+                a=makeChildNode((yyvsp[-2].node),a);
+                a=makeChildNode((yyvsp[-1].symInfo),a);
+                a=makeChildNode((yyvsp[0].node),a);
                 (yyval.node) = a;
 
-                // do implicit typecast
-                string typecast_ret = do_implicit_typecast((yyvsp[-2].node)->HelperType,(yyvsp[0].node)->HelperType);
+
+                string typecast_ret = typecast((yyvsp[-2].node)->resultType,(yyvsp[0].node)->resultType);
 
                 if(typecast_ret != "NULL")
                 {
-                    if(typecast_ret != "error") strcpy((yyval.node)->HelperType, "int"); // ALWAYS INT
+                    if(typecast_ret != "error") strcpy((yyval.node)->resultType, "int");
                     else {
 
-                        if(!strcmp((yyvsp[-2].node)->HelperType, "void") || !strcmp((yyvsp[0].node)->HelperType, "void"))
+                        if(!strcmp((yyvsp[-2].node)->resultType, "void") || !strcmp((yyvsp[0].node)->resultType, "void"))
                         {
-                            error_type_cast_void();
+                            void_expression_error();
                         }
                         else
                         {
-                            error_type_cast();
+                            typecast_error();
                         }
 
-                        strcpy((yyval.node)->HelperType, "NULL");
+                        strcpy((yyval.node)->resultType, "NULL");
                     }
                 }
                 else
                 {
-                    strcpy((yyval.node)->HelperType, "NULL");
+                    strcpy((yyval.node)->resultType, "NULL");
                 }
             }
-#line 3302 "y.tab.c"
+#line 3203 "y.tab.c"
     break;
 
   case 74: /* simple_expression: term  */
-#line 1606 "parser.y"
+#line 1506 "parser.y"
                         {
 
-                    print_grammar_rule("simple_expression","term");
-                    tnode *a = CreateTnode();
+                    print_rule("simple_expression","term");
+                    ptnode *a = getNewNode();
                     strcpy(a->token,"simple_expression");
-                    a=ProgramNode((yyvsp[0].node),a);
+                    a=makeChildNode((yyvsp[0].node),a);
                     (yyval.node) = a;
 
-                    // update vector : push up
-                    strcpy((yyval.node)->HelperType, (yyvsp[0].node)->HelperType);
+    
+                    strcpy((yyval.node)->resultType, (yyvsp[0].node)->resultType);
             }
-#line 3318 "y.tab.c"
+#line 3219 "y.tab.c"
     break;
 
   case 75: /* simple_expression: simple_expression ADDOP term  */
-#line 1617 "parser.y"
+#line 1517 "parser.y"
                                                      {
-                    print_grammar_rule("simple_expression","simple_expression ADDOP term");
+                    print_rule("simple_expression","simple_expression ADDOP term");
 
-                    tnode *a = CreateTnode();
+                    ptnode *a = getNewNode();
                     strcpy(a->token,"simple_expression");
-                    a=ProgramNode((yyvsp[-2].node),a);
-                    a=ProgramNode((yyvsp[-1].symbol_info),a);
-                    a=ProgramNode((yyvsp[0].node),a);
+                    a=makeChildNode((yyvsp[-2].node),a);
+                    a=makeChildNode((yyvsp[-1].symInfo),a);
+                    a=makeChildNode((yyvsp[0].node),a);
                     (yyval.node) = a;
 
-                    string typecast_ret = do_implicit_typecast((yyvsp[-2].node)->HelperType,(yyvsp[0].node)->HelperType);
+                    string typecast_ret = typecast((yyvsp[-2].node)->resultType,(yyvsp[0].node)->resultType);
 
                     if(typecast_ret != "NULL")
                     {
-                        if(typecast_ret != "error")     strcpy((yyval.node)->HelperType, typecast_ret.c_str());
+                        if(typecast_ret != "error")     strcpy((yyval.node)->resultType, typecast_ret.c_str());
                         else {
-                            if(!strcmp((yyvsp[-2].node)->HelperType, "void") || !strcmp((yyvsp[0].node)->HelperType, "void"))
+                            if(!strcmp((yyvsp[-2].node)->resultType, "void") || !strcmp((yyvsp[0].node)->resultType, "void"))
                             {
-                                error_type_cast_void();
+                                void_expression_error();
                             }
                             else
                             {
-                                error_type_cast();
+                                typecast_error();
                             }
 
-                            strcpy((yyval.node)->HelperType, "NULL");
+                            strcpy((yyval.node)->resultType, "NULL");
                         }
                     }
                     else
                     {
-                        strcpy((yyval.node)->HelperType, "NULL");
+                        strcpy((yyval.node)->resultType, "NULL");
                     }
             }
-#line 3356 "y.tab.c"
+#line 3257 "y.tab.c"
     break;
 
   case 76: /* term: unary_expression  */
-#line 1652 "parser.y"
+#line 1552 "parser.y"
                          {
 
-            print_grammar_rule("term","unary_expression");
-            tnode *a = CreateTnode();
+            print_rule("term","unary_expression");
+            ptnode *a = getNewNode();
             strcpy(a->token,"term");
-            a=ProgramNode((yyvsp[0].node),a);
+            a=makeChildNode((yyvsp[0].node),a);
             (yyval.node) = a;
 
-            // update vector : push up
-            strcpy((yyval.node)->HelperType, (yyvsp[0].node)->HelperType);
+
+            strcpy((yyval.node)->resultType, (yyvsp[0].node)->resultType);
     }
-#line 3372 "y.tab.c"
+#line 3273 "y.tab.c"
     break;
 
   case 77: /* term: term MULOP unary_expression  */
-#line 1663 "parser.y"
+#line 1563 "parser.y"
                                    {
 
-            print_grammar_rule("term","term MULOP unary_expression");
+            print_rule("term","term MULOP unary_expression");
 
-            tnode *a = CreateTnode();
+            ptnode *a = getNewNode();
             strcpy(a->token,"term");
-            a=ProgramNode((yyvsp[-2].node),a);
-            a=ProgramNode((yyvsp[-1].symbol_info),a);
-            a=ProgramNode((yyvsp[0].node),a);
+            a=makeChildNode((yyvsp[-2].node),a);
+            a=makeChildNode((yyvsp[-1].symInfo),a);
+            a=makeChildNode((yyvsp[0].node),a);
             (yyval.node) = a;
 
-            // implicit typecast
-            string typecast_ret = do_implicit_typecast((yyvsp[-2].node)->HelperType,(yyvsp[0].node)->HelperType);
 
-            if((yyvsp[-1].symbol_info)->lexeme == "%")
+            string typecast_ret = typecast((yyvsp[-2].node)->resultType,(yyvsp[0].node)->resultType);
+
+            if((yyvsp[-1].symInfo)->lexeme == "%")
             {
-                if(!strcmp((yyvsp[0].node)->valname,"0"))
+                if(!strcmp((yyvsp[0].node)->value,"0"))
                 {
                     fprintf(errout, "Line# %d: Warning: modulus by zero\n", line_count);
                     err_count++;
-                    strcpy((yyval.node)->HelperType, "NULL");
+                    strcpy((yyval.node)->resultType, "NULL");
                 }
                 else
                 {
@@ -3401,10 +3302,10 @@ yyreduce:
                     {
                         fprintf(errout, "Line# %d: Operands of modulus must be integers\n", line_count);
                         err_count++;
-                        strcpy((yyval.node)->HelperType, "NULL");
+                        strcpy((yyval.node)->resultType, "NULL");
                     }
                     else{
-                        strcpy((yyval.node)->HelperType, "int");
+                        strcpy((yyval.node)->resultType, "int");
                     }
                 }
             }
@@ -3412,126 +3313,126 @@ yyreduce:
             {
                 if(typecast_ret != "NULL")
                 {
-                    if(typecast_ret != "error") strcpy((yyval.node)->HelperType, typecast_ret.c_str());
+                    if(typecast_ret != "error") strcpy((yyval.node)->resultType, typecast_ret.c_str());
                     else {
-                        if(strcmp((yyvsp[-2].node)->HelperType, "void")==0 || strcmp((yyvsp[0].node)->HelperType, "void")==0)
+                        if(strcmp((yyvsp[-2].node)->resultType, "void")==0 || strcmp((yyvsp[0].node)->resultType, "void")==0)
                         {
-                            error_type_cast_void();
+                            void_expression_error();
                         }
                         else
                         {
-                            error_type_cast();
+                            typecast_error();
                         }
 
-                        strcpy((yyval.node)->HelperType, "NULL");
+                        strcpy((yyval.node)->resultType, "NULL");
                     }
                 }
                 else
                 {
-                    strcpy((yyval.node)->HelperType, "NULL");
+                    strcpy((yyval.node)->resultType, "NULL");
                 }
             }
     }
-#line 3436 "y.tab.c"
+#line 3337 "y.tab.c"
     break;
 
   case 78: /* unary_expression: ADDOP unary_expression  */
-#line 1724 "parser.y"
+#line 1624 "parser.y"
                                           {
-                print_grammar_rule("unary_expression","ADDOP unary_expression");
-                tnode *a = CreateTnode();
+                print_rule("unary_expression","ADDOP unary_expression");
+                ptnode *a = getNewNode();
                 strcpy(a->token,"unary_expression");
-                a=ProgramNode((yyvsp[-1].symbol_info),a);
-                a=ProgramNode((yyvsp[0].node),a);
+                a=makeChildNode((yyvsp[-1].symInfo),a);
+                a=makeChildNode((yyvsp[0].node),a);
                 (yyval.node) = a;
-                // implicit typecast
-                strcpy((yyval.node)->HelperType, (yyvsp[0].node)->HelperType);
+    
+                strcpy((yyval.node)->resultType, (yyvsp[0].node)->resultType);
             }
-#line 3451 "y.tab.c"
+#line 3352 "y.tab.c"
     break;
 
   case 79: /* unary_expression: NOT unary_expression  */
-#line 1734 "parser.y"
+#line 1634 "parser.y"
                                            {
-                print_grammar_rule("unary_expression","NOT unary_expression");
-                tnode *a = CreateTnode();
+                print_rule("unary_expression","NOT unary_expression");
+                ptnode *a = getNewNode();
                 strcpy(a->token,"unary_expression");
-                a=ProgramNode("NOT",a);
-                a=ProgramNode((yyvsp[0].node),a);
+                a=makeChildNode("NOT",a);
+                a=makeChildNode((yyvsp[0].node),a);
                 (yyval.node) = a;
-                // implicit typecast
-                strcpy((yyval.node)->HelperType, (yyvsp[0].node)->HelperType);
+    
+                strcpy((yyval.node)->resultType, (yyvsp[0].node)->resultType);
             }
-#line 3466 "y.tab.c"
+#line 3367 "y.tab.c"
     break;
 
   case 80: /* unary_expression: factor  */
-#line 1744 "parser.y"
+#line 1644 "parser.y"
                               { 
-                print_grammar_rule("unary_expression","factor");
-                tnode *a = CreateTnode();
+                print_rule("unary_expression","factor");
+                ptnode *a = getNewNode();
                 strcpy(a->token,"unary_expression");
-                a=ProgramNode((yyvsp[0].node),a);
+                a=makeChildNode((yyvsp[0].node),a);
                 (yyval.node) = a;
-                strcpy((yyval.node)->valname, (yyvsp[0].node)->valname);
-                // implicit typecast
-                strcpy((yyval.node)->HelperType, (yyvsp[0].node)->HelperType);
+                strcpy((yyval.node)->value, (yyvsp[0].node)->value);
+    
+                strcpy((yyval.node)->resultType, (yyvsp[0].node)->resultType);
             }
-#line 3481 "y.tab.c"
+#line 3382 "y.tab.c"
     break;
 
   case 81: /* factor: variable  */
-#line 1756 "parser.y"
+#line 1656 "parser.y"
                  {
 
-            print_grammar_rule("factor","variable");
-            tnode *a = CreateTnode();
+            print_rule("factor","variable");
+            ptnode *a = getNewNode();
             strcpy(a->token,"factor");
-            a=ProgramNode((yyvsp[0].node),a);
+            a=makeChildNode((yyvsp[0].node),a);
             (yyval.node) = a;
 
-            // implicit typecast
-            strcpy((yyval.node)->HelperType, (yyvsp[0].node)->HelperType);
+
+            strcpy((yyval.node)->resultType, (yyvsp[0].node)->resultType);
         }
-#line 3497 "y.tab.c"
+#line 3398 "y.tab.c"
     break;
 
   case 82: /* factor: ID LPAREN argument_list RPAREN  */
-#line 1767 "parser.y"
+#line 1667 "parser.y"
                                          {
 
-            print_grammar_rule("factor","ID LPAREN argument_list RPAREN");
-            tnode *a = CreateTnode();
+            print_rule("factor","ID LPAREN argument_list RPAREN");
+            ptnode *a = getNewNode();
             strcpy(a->token,"factor");
-            a=ProgramNode((yyvsp[-3].symbol_info),a);
-            a=ProgramNode("LPAREN",a);
-            a=ProgramNode((yyvsp[-1].node),a);
-            a=ProgramNode("RPAREN",a);
+            a=makeChildNode((yyvsp[-3].symInfo),a);
+            a=makeChildNode("LPAREN",a);
+            a=makeChildNode((yyvsp[-1].node),a);
+            a=makeChildNode("RPAREN",a);
             (yyval.node) = a;
 
-            // check error
-            SymbolInfo* ret_symbol = sym_tab->_search((yyvsp[-3].symbol_info)->lexeme);
+
+            SymbolInfo* ret_symbol = sym_tab->_search((yyvsp[-3].symInfo)->lexeme);
 
             if(ret_symbol == NULL)
             {
-                fprintf(errout, "Line# %d: Undeclared function \'%s\'\n", line_count, ((yyvsp[-3].symbol_info)->lexeme).data());
+                fprintf(errout, "Line# %d: Undeclared function \'%s\'\n", line_count, ((yyvsp[-3].symInfo)->lexeme).data());
                 err_count++;
-                strcpy((yyval.node)->HelperType,"NULL");
+                strcpy((yyval.node)->resultType,"NULL");
             }
             else
             {
                 if(ret_symbol->isFunc == false)
                 {
-                    strcpy((yyval.node)->HelperType,"NULL");
-                    fprintf(errout, "Line# %d: %s not a function\n", line_count, ((yyvsp[-3].symbol_info)->lexeme).data());
+                    strcpy((yyval.node)->resultType,"NULL");
+                    fprintf(errout, "Line# %d: %s not a function\n", line_count, ((yyvsp[-3].symInfo)->lexeme).data());
                     err_count++;
                 }
 
-                //convert data_type to lowercase and pass it up as HelperType of 'factor'
+                //convert data_type to lowercase and pass it up as resultType of 'factor'
                 char *temp = new char(100);
                 strcpy(temp, ret_symbol->data_type.c_str());
                 for(int i = 0; i < 100; i++)    temp[i] = tolower(temp[i]);
-                strcpy((yyval.node)->HelperType, temp);
+                strcpy((yyval.node)->resultType, temp);
                 free(temp);
                 //
 
@@ -3540,7 +3441,7 @@ yyreduce:
                     fprintf(errout, "Line# %d: Function declared, but not defined\n", line_count);
                     err_count++;
                 }
-                else // other errors
+                else
                 {
                     if(((yyvsp[-1].node)->args_list.size() - ret_symbol->args_list.size()) > 0){
                         fprintf(errout, "Line# %d: Too many arguments to function \'%s\'\n", line_count, (ret_symbol->lexeme).data());
@@ -3554,7 +3455,7 @@ yyreduce:
                     {
                         for(int i=0;i<ret_symbol->args_list.size();i++)
                         {
-                            if(!is_param_typecast_ok(ret_symbol->args_list[i], (yyvsp[-1].node)->args_list[i])){
+                            if(!is_typecast_valid(ret_symbol->args_list[i], (yyvsp[-1].node)->args_list[i])){
                                 fprintf(errout, "Line# %d: Type mismatch for argument %d of \'%s\'\n", line_count, (i+1), (ret_symbol->lexeme).data());
                                 err_count++;
                             }
@@ -3563,161 +3464,156 @@ yyreduce:
                 }
             }
         }
-#line 3567 "y.tab.c"
+#line 3468 "y.tab.c"
     break;
 
   case 83: /* factor: LPAREN expression RPAREN  */
-#line 1832 "parser.y"
+#line 1732 "parser.y"
                                    {
 
-            print_grammar_rule("factor","LPAREN expression RPAREN");
-            tnode *a = CreateTnode();
+            print_rule("factor","LPAREN expression RPAREN");
+            ptnode *a = getNewNode();
             strcpy(a->token,"factor");
-            a=ProgramNode("LPAREN",a);
-            a=ProgramNode((yyvsp[-1].node),a);
-            a=ProgramNode("RPAREN",a);
+            a=makeChildNode("LPAREN",a);
+            a=makeChildNode((yyvsp[-1].node),a);
+            a=makeChildNode("RPAREN",a);
             (yyval.node) = a;
         
-            strcpy((yyval.node)->HelperType, (yyvsp[-1].node)->HelperType);
+            strcpy((yyval.node)->resultType, (yyvsp[-1].node)->resultType);
         }
-#line 3584 "y.tab.c"
+#line 3485 "y.tab.c"
     break;
 
   case 84: /* factor: CONST_INT  */
-#line 1844 "parser.y"
+#line 1744 "parser.y"
                      { 
-            print_grammar_rule("factor","CONST_INT");
-            tnode *a = CreateTnode();
+            print_rule("factor","CONST_INT");
+            ptnode *a = getNewNode();
             strcpy(a->token,"factor");
-            a=ProgramNode((yyvsp[0].symbol_info),a);
+            a=makeChildNode((yyvsp[0].symInfo),a);
             (yyval.node) = a;
-            strcpy((yyval.node)->valname, (yyvsp[0].symbol_info)->lexeme.c_str());
-            // pass up
-            strcpy((yyval.node)->HelperType, "int");
+            strcpy((yyval.node)->value, (yyvsp[0].symInfo)->lexeme.c_str());
+            strcpy((yyval.node)->resultType, "int");
         }
-#line 3599 "y.tab.c"
+#line 3499 "y.tab.c"
     break;
 
   case 85: /* factor: CONST_FLOAT  */
-#line 1854 "parser.y"
+#line 1753 "parser.y"
                        { 
-            print_grammar_rule("factor","CONST_FLOAT");
-            tnode *a = CreateTnode();
+            print_rule("factor","CONST_FLOAT");
+            ptnode *a = getNewNode();
             strcpy(a->token,"factor");
-            a=ProgramNode((yyvsp[0].symbol_info),a);
+            a=makeChildNode((yyvsp[0].symInfo),a);
             (yyval.node) = a;
-            strcpy((yyval.node)->valname, (yyvsp[0].symbol_info)->lexeme.c_str());
-            // pass up
-            strcpy((yyval.node)->HelperType, "float");
+            strcpy((yyval.node)->value, (yyvsp[0].symInfo)->lexeme.c_str());
+            strcpy((yyval.node)->resultType, "float");
         }
-#line 3614 "y.tab.c"
+#line 3513 "y.tab.c"
     break;
 
   case 86: /* factor: ERROR_FLOAT  */
-#line 1864 "parser.y"
+#line 1762 "parser.y"
                    { 
-            print_grammar_rule("factor","ERROR_FLOAT");
-            tnode *a = CreateTnode();
+            print_rule("factor","ERROR_FLOAT");
+            ptnode *a = getNewNode();
             strcpy(a->token,"factor");
-            a=ProgramNode((yyvsp[0].symbol_info),a);
+            a=makeChildNode((yyvsp[0].symInfo),a);
             (yyval.node) = a;
-            strcpy((yyval.node)->valname, (yyvsp[0].symbol_info)->lexeme.c_str());
-            // pass up
-            strcpy((yyval.node)->HelperType, "NULL");
+            strcpy((yyval.node)->value, (yyvsp[0].symInfo)->lexeme.c_str());
+            strcpy((yyval.node)->resultType, "NULL");
         }
-#line 3629 "y.tab.c"
+#line 3527 "y.tab.c"
     break;
 
   case 87: /* factor: variable INCOP  */
-#line 1874 "parser.y"
+#line 1771 "parser.y"
                          {
-            print_grammar_rule("factor","variable INCOP");
-            tnode *a = CreateTnode();
+            print_rule("factor","variable INCOP");
+            ptnode *a = getNewNode();
             strcpy(a->token,"factor");
-            a=ProgramNode((yyvsp[-1].node),a);
-            a=ProgramNode("INCOP",a);
+            a=makeChildNode((yyvsp[-1].node),a);
+            a=makeChildNode("INCOP",a);
             (yyval.node) = a;
         }
-#line 3642 "y.tab.c"
+#line 3540 "y.tab.c"
     break;
 
   case 88: /* factor: variable DECOP  */
-#line 1882 "parser.y"
+#line 1779 "parser.y"
                          {
-            print_grammar_rule("factor","variable DECOP");
-            tnode *a = CreateTnode();
+            print_rule("factor","variable DECOP");
+            ptnode *a = getNewNode();
             strcpy(a->token,"factor");
-            a=ProgramNode((yyvsp[-1].node),a);
-            a=ProgramNode("DECOP",a);
+            a=makeChildNode((yyvsp[-1].node),a);
+            a=makeChildNode("DECOP",a);
             (yyval.node) = a;
         }
-#line 3655 "y.tab.c"
+#line 3553 "y.tab.c"
     break;
 
   case 89: /* argument_list: arguments  */
-#line 1892 "parser.y"
+#line 1789 "parser.y"
                          {
-
-                    print_grammar_rule("argument_list","arguments");
-                    tnode *a = CreateTnode();
+                    print_rule("argument_list","arguments");
+                    ptnode *a = getNewNode();
                     strcpy(a->token,"argument_list");
-                    a=ProgramNode((yyvsp[0].node),a);
+                    a=makeChildNode((yyvsp[0].node),a);
                     (yyval.node) = a;
-
                     (yyval.node)->args_list = (yyvsp[0].node)->args_list; 
                 }
-#line 3670 "y.tab.c"
+#line 3566 "y.tab.c"
     break;
 
   case 90: /* argument_list: %empty  */
-#line 1902 "parser.y"
+#line 1797 "parser.y"
                           {
-                print_grammar_rule("argument_list","");
-                tnode *a = CreateTnode();
+                print_rule("argument_list","");
+                ptnode *a = getNewNode();
                 strcpy(a->token,"argument_list");
                 (yyval.node) = a;
             }
-#line 3681 "y.tab.c"
+#line 3577 "y.tab.c"
     break;
 
   case 91: /* arguments: arguments COMMA logic_expression  */
-#line 1910 "parser.y"
+#line 1805 "parser.y"
                                             {
 
-                print_grammar_rule("arguments","arguments COMMA logic_expression");
-                tnode *a = CreateTnode();
+                print_rule("arguments","arguments COMMA logic_expression");
+                ptnode *a = getNewNode();
                 strcpy(a->token,"arguments");
-                a=ProgramNode((yyvsp[-2].node),a);
-                a=ProgramNode("COMMA",a);
-                a=ProgramNode((yyvsp[0].node),a);
+                a=makeChildNode((yyvsp[-2].node),a);
+                a=makeChildNode("COMMA",a);
+                a=makeChildNode((yyvsp[0].node),a);
                 (yyval.node) = a;
 
-                // update vector
+
                 (yyval.node)->args_list = (yyvsp[-2].node)->args_list; 
-                (yyval.node)->args_list.push_back((yyvsp[0].node)->HelperType);
+                (yyval.node)->args_list.push_back((yyvsp[0].node)->resultType);
             }
-#line 3700 "y.tab.c"
+#line 3596 "y.tab.c"
     break;
 
   case 92: /* arguments: logic_expression  */
-#line 1924 "parser.y"
+#line 1819 "parser.y"
                                {
 
-                print_grammar_rule("arguments","logic_expression");
-                tnode *a = CreateTnode();
+                print_rule("arguments","logic_expression");
+                ptnode *a = getNewNode();
                 strcpy(a->token,"arguments");
-                a=ProgramNode((yyvsp[0].node),a);
+                a=makeChildNode((yyvsp[0].node),a);
                 (yyval.node) = a;
 
-                // update helper type
-                strcpy((yyval.node)->HelperType, (yyvsp[0].node)->HelperType);
-                (yyval.node)->args_list.push_back((yyvsp[0].node)->HelperType);
+
+                strcpy((yyval.node)->resultType, (yyvsp[0].node)->resultType);
+                (yyval.node)->args_list.push_back((yyvsp[0].node)->resultType);
             }
-#line 3717 "y.tab.c"
+#line 3613 "y.tab.c"
     break;
 
 
-#line 3721 "y.tab.c"
+#line 3617 "y.tab.c"
 
       default: break;
     }
@@ -3910,7 +3806,7 @@ yyreturnlab:
   return yyresult;
 }
 
-#line 1938 "parser.y"
+#line 1833 "parser.y"
 
 
 main(int argc,char *argv[])
@@ -3932,7 +3828,7 @@ main(int argc,char *argv[])
 
     yyin=fin;
 	yyparse();
-    if(NTnode != NULL) printtree(NTnode);
+    if(Root != NULL) printtree(Root);
 
     fprintf(logout, "Total lines: %d\n", line_count);
     fprintf(logout, "Total errors: %d\n", err_count);
